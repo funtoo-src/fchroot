@@ -3,7 +3,8 @@
 # This python script will register a binary format for qemu franken-chroot.
 
 import sys
-from fchroot.binfmt import get_binary_hexstring, configure_binfmt
+from fchroot.binfmt import get_binary_hexstring, register_binfmt
+from fchroot.exception import QEMUException
 
 def usage():
 	print("""Usage:
@@ -16,18 +17,22 @@ def usage():
 
 
 if __name__ == "__main__":
-	if len(sys.argv) <= 2:
-		usage()
-	elif sys.argv[1] == "register":
-		if len(sys.argv) != 4:
+	try:
+		if len(sys.argv) <= 2:
 			usage()
-		configure_binfmt(sys.argv[2], sys.argv[3])
-	elif sys.argv[1] == "hexstring":
-		if len(sys.argv) != 3:
-			usage()
-		print(get_binary_hexstring(sys.argv[2]))
-	else:
-		sys.stderr.write("Unrecognized command: %s\n" % sys.argv[1])
+		elif sys.argv[1] == "register":
+			if len(sys.argv) != 4:
+				usage()
+			register_binfmt(sys.argv[2], sys.argv[3])
+		elif sys.argv[1] == "hexstring":
+			if len(sys.argv) != 3:
+				usage()
+			print(get_binary_hexstring(sys.argv[2]))
+		else:
+			sys.stderr.write("Unrecognized command: %s\n" % sys.argv[1])
+			sys.exit(1)
+	except QEMUException as e:
+		sys.stderr.write(str(e))
 		sys.exit(1)
 
 # vim: ts=4 sw=4 noet
