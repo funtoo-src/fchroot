@@ -1,0 +1,3 @@
+#!/usr/bin/python3
+
+from fchroot.binfmt import is_binfmt_registered, register_binfmt
