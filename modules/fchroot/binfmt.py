@@ -1,8 +1,71 @@
 #!/usr/bin/python3
 
-import os, string, sys
-from .qemu import qemu_arch_settings
-from .exception import QEMUException, QEMUWrapperException
+import os, string
+
+class QEMUException(Exception):
+	pass
+
+
+class QEMUWrapperException(QEMUException):
+	pass
+
+
+qemu_arch_settings = {
+	'arm-64bit': {
+		'qemu_binary': 'qemu-aarch64',
+		'qemu_cpu': 'cortex-a53',
+		'hexstring': '7f454c460201010000000000000000000200b7',
+	},
+	'arm-32bit': {
+		'qemu_binary': 'qemu-arm',
+		'qemu_cpu': 'cortex-a7',
+		'hexstring': '7f454c46010101000000000000000000020028',
+	}
+}
+
+native_support = {
+	'x86-64bit': ['x86-32bit'],
+	'x86-32bit': [],
+	'arm-64bit': ['arm-32bit'],
+	'arm-32bit': []
+}
+
+
+def compile_wrapper(qemu_arch):
+	"""
+	Compiles a QEMU wrapper using gcc. Will raise QEMUWrapperException if any error is encountered along the way.
+	:param qemu_arch: arch to build for -- should be 'arm-64bit' or 'arm-32bit' at the moment.
+	:return: None
+	"""
+	wrapper_code = """#include <string.h>
+#include <unistd.h>
+
+int main(int argc, char **argv, char **envp) {{
+	char *newargv[argc + 3];
+
+	newargv[0] = argv[0];
+	newargv[1] = "-cpu";
+	newargv[2] = "{qemu_cpu}";
+
+	memcpy(&newargv[3], &argv[1], sizeof(*argv) * (argc -1));
+	newargv[argc + 2] = NULL;
+	return execve("/usr/local/bin/{qemu_binary}", newargv, envp);
+}}
+	"""
+	if not os.path.exists(wrapper_storage_path):
+		try:
+			os.makedirs(wrapper_storage_path)
+		except PermissionError:
+			raise QEMUWrapperException("Unable to create path to store wrappers: %s" % wrapper_storage_path)
+	try:
+		with open(os.path.join(wrapper_storage_path, "qemu-%s-wrapper.c" % qemu_arch), "w") as f:
+			f.write(wrapper_code.format(**qemu_arch_settings[qemu_arch]))
+		retval = os.system("cd {wrapper_path}; gcc -static -O2 -s -o qemu-{qemu_arch}-wrapper qemu-{qemu_arch}-wrapper.c".format(wrapper_path=wrapper_storage_path, qemu_arch=qemu_arch))
+		if retval != 0:
+			raise QEMUWrapperException("Compilation failed.")
+	except (IOError, PermissionError) as e:
+		raise QEMUWrapperException(str(e))
+
 
 # Where our stuff will look for qemu binaries:
 qemu_binary_path = "/usr/bin"
@@ -20,6 +83,17 @@ def native_arch_desc():
 		raise QEMUException("Arch of %s not recognized." % uname_arch)
 	return host_arch
 
+def qemu_path(arch_desc):
+	return os.path.join(qemu_binary_path, qemu_arch_settings[arch_desc]['qemu_binary'].lstrip("/"))
+
+def qemu_exists(arch_desc):
+	return os.path.exists(qemu_path(arch_desc))
+
+def wrapper_path(arch_desc):
+	return os.path.join(wrapper_storage_path, 'qemu-%s-wrapper' % arch_desc)
+
+def wrapper_exists(arch_desc):
+	return os.path.exists(wrapper_path(arch_desc))
 
 def supported_binfmts(native_arch_desc=None):
 	if native_arch_desc is None:
@@ -28,6 +102,12 @@ def supported_binfmts(native_arch_desc=None):
 		# TODO: return supported QEMU arch_descs specific to a native arch_desc.
 		return set()
 
+def get_arch_of_binary(path):
+	hexstring = get_binary_hexstring(path)
+	for arch_desc, arch_settings in qemu_arch_settings.items():
+		if hexstring == arch_settings['hexstring']:
+			return arch_desc
+	return None
 
 def get_binary_hexstring(path):
 	chunk_as_hexstring = ""

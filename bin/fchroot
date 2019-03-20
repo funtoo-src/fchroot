@@ -1,3 +1,70 @@
 #!/usr/bin/python3
 
-from fchroot.binfmt import is_binfmt_registered, register_binfmt
+import os, sys, subprocess
+
+gitpath = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.git")
+if os.path.exists(gitpath):
+	# run from git repo
+	sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../modules"))
+
+from fchroot.binfmt import *
+
+if sys.stdout.isatty():
+	GREEN = '\033[92m'
+	CYAN = '\033[96m'
+	END = '\033[0m'
+else:
+	CYAN = ""
+	END = ""
+
+if __name__ == "__main__":
+	if len(sys.argv) < 2 or not os.path.exists(sys.argv[1]):
+		sys.stderr.write("Please specify a chroot path as a first argument.\n")
+		sys.exit(1)
+
+	arch_desc = None
+
+	for binary in [ "bin/cp", "bin/ps", "bin/awk" ]:
+		binary_path = os.path.join(sys.argv[1], binary)
+		if os.path.exists(binary_path):
+			arch_desc = get_arch_of_binary(binary_path)
+			if arch_desc is None:
+				sys.stderr.write('Did not recognize chroot environment. Exiting.\n')
+				sys.exit(1)
+
+	if arch_desc is None:
+		sys.stderr.write("Could not find common binaries to scan in chroot environment. Exiting.\n")
+		sys.exit(1)
+
+	if not qemu_exists(arch_desc):
+		sys.stderr.write("Could not find qemu binary at %s. Exiting.\n" % qemu_path(arch_desc))
+		sys.exit(1)
+
+	if not wrapper_exists(arch_desc):
+		compile_wrapper(arch_desc)
+		if not wrapper_exists(arch_desc):
+			sys.stderr.write("Unable to compile wrapper. Exiting.\n")
+			sys.exit(1)
+
+	if not is_binfmt_registered(arch_desc):
+		register_binfmt(arch_desc, wrapper_path(arch_desc))
+
+	mounts = {
+		"proc": ["/bin/mount", "-t", "proc", "proc"],
+		"sys": ["/bin/mount", "--rbind", "/sys"],
+		"dev": ["/bin/mount", "--rbind", "/dev"]
+	}
+
+	for mount, mount_cmd in mounts.items():
+		mount_point = os.path.join(sys.argv[1], mount)
+		if os.path.isdir(mount_point) and not os.path.ismount(mount_point):
+			mount_cmd = mount_cmd + [ mount_point ]
+			sys.stderr.write(GREEN + ">>>" + END + " Setting up /%s...\n" % mount)
+			result = subprocess.run(mount_cmd)
+			if result.returncode != 0:
+				sys.stderr.write("\nMount error.\n")
+				sys.exit(1)
+
+	# spawn chroot
+	sys.stderr.write(GREEN + ">>> " + CYAN + arch_desc + END + GREEN + " frankenchroot B]" + END + "...\n")
+	os.execvp('/bin/chroot', ['/bin/chroot'] + sys.argv[1:])
