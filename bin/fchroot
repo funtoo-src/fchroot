@@ -17,6 +17,8 @@ else:
 	CYAN = ""
 	END = ""
 
+# TODO -- add --verbose option?
+
 if __name__ == "__main__":
 	if len(sys.argv) < 2 or not os.path.exists(sys.argv[1]):
 		sys.stderr.write("Please specify a chroot path as a first argument.\n")
@@ -86,6 +88,10 @@ if __name__ == "__main__":
 			if result.returncode != 0:
 				sys.stderr.write("\nMount error.\n")
 				sys.exit(1)
+
+	# copy /etc/resolv.conf into chroot:
+	if os.path.exists("/etc/resolv.conf"):
+		subprocess.run(["/bin/cp", "/etc/resolv.conf", os.path.join(sys.argv[1], "etc")])
 
 	# spawn chroot - this will replace this process:
 	sys.stderr.write(GREEN + ">>> " + CYAN + arch_desc + END + GREEN + " frankenchroot B]" + END + "...\n")
