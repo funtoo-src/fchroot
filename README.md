@@ -38,7 +38,7 @@ in fact, at the very end of doing all its magic, it passes all of its arguments 
 grunt-work to make the `chroot` work:
 
 * `fchroot` will look inside the specified directory and attempt to auto-detect
-what kind of non-native binary it's dealing with. It will currently recognize arm-32bit
+what kind of non-native environment it's dealing with. It will currently recognize arm-32bit
 and arm-64bit environments.
 * `fchroot` will check to see if QEMU is available for the detected non-native
 architecture and abort with a (hopefully) useful error message if it is not.
@@ -74,7 +74,7 @@ new architectures -- but for now, be aware of the current architectures supporte
 QEMU will need to be installed with the ``aarch64`` and ``arm`` user targets enabled.
 In addition, it will need to be compiled as a *static* binary. In Funtoo Linux and
 Gentoo Linux, this can be accomplished by adding the following configuration
-prior to running ``emerge qemu```:
+prior to running ``emerge qemu``:
 
 Add to ``/etc/make.conf``:
 
