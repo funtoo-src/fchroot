@@ -36,19 +36,41 @@ if __name__ == "__main__":
 		sys.stderr.write("Could not find common binaries to scan in chroot environment. Exiting.\n")
 		sys.exit(1)
 
+	# ensure required qemu binary exists in /usr/bin
 	if not qemu_exists(arch_desc):
 		sys.stderr.write("Could not find qemu binary at %s. Exiting.\n" % qemu_path(arch_desc))
 		sys.exit(1)
 
+	# create /usr/local/bin in chroot if it doesn't exist
+	local_bin_path = os.path.join(sys.argv[1], "usr/local/bin")
+	if not os.path.exists(local_bin_path):
+		os.makedirs(local_bin_path)
+
+	# copy static qemu binary into chroot
+	chroot_qemu_path = os.path.join(sys.argv[1], "usr/local/bin/", qemu_arch_settings[arch_desc]["qemu_binary"])
+	if not os.path.exists(chroot_qemu_path):
+		result = subprocess.run(["/bin/cp", qemu_path(arch_desc), chroot_qemu_path])
+		if result.returncode != 0:
+			sys.stderr.write("Unable to copy qemu into chroot. Exiting.\n")
+			sys.exit(1)
+
+	# compile wrapper if it doesn't exist
 	if not wrapper_exists(arch_desc):
 		compile_wrapper(arch_desc)
 		if not wrapper_exists(arch_desc):
 			sys.stderr.write("Unable to compile wrapper. Exiting.\n")
 			sys.exit(1)
 
+	# copy wrapper into chroot
+	chroot_wrapper_path = os.path.join(sys.argv[1], "usr/local/bin/", "qemu-%s-wrapper" % arch_desc)
+	if not os.path.exists(chroot_wrapper_path):
+		result = subprocess.run(["/bin/cp", wrapper_path(arch_desc), chroot_wrapper_path])
+
+	# register binary format if it is not yet registered
 	if not is_binfmt_registered(arch_desc):
 		register_binfmt(arch_desc, wrapper_path(arch_desc))
 
+	# auto-mount any necessary things automatically as a convenience
 	mounts = {
 		"proc": ["/bin/mount", "-t", "proc", "proc"],
 		"sys": ["/bin/mount", "--rbind", "/sys"],
@@ -65,6 +87,6 @@ if __name__ == "__main__":
 				sys.stderr.write("\nMount error.\n")
 				sys.exit(1)
 
-	# spawn chroot
+	# spawn chroot - this will replace this process:
 	sys.stderr.write(GREEN + ">>> " + CYAN + arch_desc + END + GREEN + " frankenchroot B]" + END + "...\n")
 	os.execvp('/bin/chroot', ['/bin/chroot'] + sys.argv[1:])
