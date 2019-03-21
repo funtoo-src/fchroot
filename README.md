@@ -79,7 +79,7 @@ prior to running ``emerge qemu```:
 Add to ``/etc/make.conf``:
 
 ```bash
-QEMU_USER_TARGETS="aarch64 arm
+QEMU_USER_TARGETS="aarch64 arm"
 ```
 
 Add to ``/etc/portage/package.use``
