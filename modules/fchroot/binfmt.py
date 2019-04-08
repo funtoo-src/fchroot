@@ -14,12 +14,12 @@ qemu_arch_settings = {
 	'arm-64bit': {
 		'qemu_binary': 'qemu-aarch64',
 		'qemu_cpu': 'cortex-a53',
-		'hexstring': '7f454c460201010000000000000000000200b7',
+		'hexstring': [ '7f454c460201010000000000000000000200b7' ], 
 	},
 	'arm-32bit': {
 		'qemu_binary': 'qemu-arm',
 		'qemu_cpu': 'cortex-a7',
-		'hexstring': '7f454c46010101000000000000000000020028',
+		'hexstring': [ '7f454c46010101000000000000000000020028', '7f454c46010101000000000000000000030028' ]
 	}
 }
 
@@ -105,7 +105,7 @@ def supported_binfmts(native_arch_desc=None):
 def get_arch_of_binary(path):
 	hexstring = get_binary_hexstring(path)
 	for arch_desc, arch_settings in qemu_arch_settings.items():
-		if hexstring == arch_settings['hexstring']:
+		if hexstring in arch_settings['hexstring']:
 			return arch_desc
 	return None
 
@@ -139,19 +139,24 @@ def register_binfmt(arch_desc, wrapper_bin):
 		raise QEMUWrapperException("Error: wrapper binary %s not found.\n" % wrapper_bin)
 	if arch_desc not in qemu_arch_settings:
 		raise QEMUWrapperException("Error: arch %s not recognized. Specify one of: %s.\n" % (arch_desc, ", ".join(supported_binfmts())))
-	if os.path.exists("/proc/sys/fs/binfmt_misc/%s" % arch_desc):
-		raise QEMUWrapperException("Error: binary format %s already registered in /proc/sys/fs/binfmt_misc.\n" % arch_desc)
-	try:
-		with open("/proc/sys/fs/binfmt_misc/register", "w") as f:
-			chunk_as_hexstring = qemu_arch_settings[arch_desc]['hexstring']
-			mask_as_hexstring = "fffffffffffffffcfffffffffffffffffeffff"
-			mask = int(mask_as_hexstring, 16)
-			chunk = int(chunk_as_hexstring, 16)
-			out_as_hexstring = hex(chunk & mask)[2:]
-			f.write(":%s:M::" % arch_desc)
-			f.write(escape_hexstring(out_as_hexstring))
-			f.write(":")
-			f.write(escape_hexstring(mask_as_hexstring))
-			f.write(":/usr/local/bin/%s:\n" % os.path.basename(wrapper_bin))
-	except (IOError, PermissionError) as e:
-		raise QEMUWrapperException("Was unable to write to /proc/sys/fs/binfmt_misc/register.")
+	hexcount = 0
+	for hexstring in qemu_arch_settings[arch_desc]['hexstring']:
+		local_arch_desc = arch_desc if hexcount == 0 else "%s-%s" % ( arch_desc, hexcount )
+		if os.path.exists("/proc/sys/fs/binfmt_misc/%s" % local_arch_desc):
+			sys.stderr.write("Warning: binary format %s already registered in /proc/sys/fs/binfmt_misc.\n" % local_arch_desc)
+		try:
+			with open("/proc/sys/fs/binfmt_misc/register", "w") as f:
+				chunk_as_hexstring = hexstring
+				mask_as_hexstring = "fffffffffffffffcfffffffffffffffffeffff"
+				mask = int(mask_as_hexstring, 16)
+				chunk = int(chunk_as_hexstring, 16)
+				out_as_hexstring = hex(chunk & mask)[2:]
+				f.write(":%s:M::" % local_arch_desc)
+				f.write(escape_hexstring(out_as_hexstring))
+				f.write(":")
+				f.write(escape_hexstring(mask_as_hexstring))
+				f.write(":/usr/local/bin/%s:\n" % os.path.basename(wrapper_bin))
+		except (IOError, PermissionError) as e:
+			raise QEMUWrapperException("Was unable to write to /proc/sys/fs/binfmt_misc/register.")
+		hexcount += 1
+# vim: ts=4 sw=4 noet
