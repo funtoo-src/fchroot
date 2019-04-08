@@ -82,7 +82,7 @@ Add to ``/etc/make.conf``:
 QEMU_USER_TARGETS="aarch64 arm"
 ```
 
-Add to ``/etc/portage/package.use``
+Add to ``/etc/portage/package.use``:
 
 ```bash
 app-emulation/qemu static-user

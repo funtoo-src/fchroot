@@ -2,9 +2,14 @@
 
 # This python script will register a binary format for qemu franken-chroot.
 
-import sys
-from fchroot.binfmt import get_binary_hexstring, register_binfmt
-from fchroot.exception import QEMUException
+import os, sys
+
+gitpath = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.git")
+if os.path.exists(gitpath):
+	# run from git repo
+	sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../modules"))
+
+from fchroot.binfmt import get_binary_hexstring, register_binfmt, QEMUException
 
 def usage():
 	print("""Usage:
