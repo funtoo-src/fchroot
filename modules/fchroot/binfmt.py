@@ -11,6 +11,11 @@ class QEMUWrapperException(QEMUException):
 
 
 qemu_arch_settings = {
+	'riscv-64bit': {
+		'qemu_binary': 'qemu-riscv64',
+		'qemu_cpu': 'sifive-u54',
+		'hexstring': [ '7f454c460201010000000000000000000200f3', '7f454c460201010000000000000000000300f3' ]
+	},
 	'arm-64bit': {
 		'qemu_binary': 'qemu-aarch64',
 		'qemu_cpu': 'cortex-a53',
