@@ -160,7 +160,8 @@ def register_binfmt(arch_desc, wrapper_bin):
 				f.write(escape_hexstring(out_as_hexstring))
 				f.write(":")
 				f.write(escape_hexstring(mask_as_hexstring))
-				f.write(":/usr/local/bin/%s:\n" % os.path.basename(wrapper_bin))
+				f.write(":/usr/local/bin/%s" % os.path.basename(wrapper_bin))
+				f.write(":C\n")
 		except (IOError, PermissionError) as e:
 			raise QEMUWrapperException("Was unable to write to /proc/sys/fs/binfmt_misc/register.")
 		hexcount += 1
