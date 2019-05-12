@@ -9,8 +9,7 @@ if os.path.exists(gitpath):
 
 from fchroot.binfmt import *
 
-simple_mode = os.path.dirname(sys.argv[0]) == "fchroot-simple"
-
+simple_mode = os.path.basename(sys.argv[0]) == "fchroot-simple"
 if sys.stdout.isatty():
 	GREEN = '\033[92m'
 	CYAN = '\033[96m'
