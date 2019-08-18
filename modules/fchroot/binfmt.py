@@ -19,7 +19,7 @@ qemu_arch_settings = {
 	'arm-64bit': {
 		'qemu_binary': 'qemu-aarch64',
 		'qemu_cpu': 'cortex-a53',
-		'hexstring': [ '7f454c460201010000000000000000000200b7' ], 
+		'hexstring': [ '7f454c460201010000000000000000000200b7', '7f454c460201010000000000000000000300b7' ]
 	},
 	'arm-32bit': {
 		'qemu_binary': 'qemu-arm',
