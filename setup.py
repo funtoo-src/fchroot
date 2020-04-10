@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="fchroot",
-    version="0.1.1",
+    version="0.1.2",
     author="Daniel Robbins",
     author_email="drobbins@funtoo.org",
     description="Funtoo franken-chroot tool.",
