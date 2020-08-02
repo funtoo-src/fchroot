@@ -21,6 +21,16 @@ qemu_arch_settings = {
 		'qemu_cpu': 'cortex-a53',
 		'hexstring': [ '7f454c460201010000000000000000000200b7', '7f454c460201010000000000000000000300b7' ]
 	},
+    },
+	'arm-64bit': {
+		'qemu_binary': 'qemu-aarch64',
+		'qemu_cpu': 'cortex-a72-cortex-a53',
+      	'hexstring': [ '7f454c460201010000000000000000000200b7', '7f454c460201010000000000000000000300b7' ]
+      #RPI4, Rock64pro , rock64, Pinebook Pro. add a72+a53 hybrid cpu 
+      #COMMON_FLAGS="-O2 -pipe -march=armv8-a+crc+crypto -mcpu=cortex-a72.cortex-a53 ${GRAPHITE} "
+	  #CFLAGS="${COMMON_FLAGS}" , CXXFLAGS="${COMMON_FLAGS}" , FCFLAGS="${COMMON_FLAGS}" , FFLAGS="${COMMON_FLAGS}"
+
+	},
 	'arm-32bit': {
 		'qemu_binary': 'qemu-arm',
 		'qemu_cpu': 'cortex-a7',
