@@ -25,7 +25,12 @@ qemu_arch_settings = {
 		'qemu_binary': 'qemu-arm',
 		'qemu_cpu': 'cortex-a7',
 		'hexstring': [ '7f454c46010101000000000000000000020028', '7f454c46010101000000000000000000030028' ]
-	}
+	},
+	'powerpc-64bit': {
+		'qemu_binary': 'qemu-ppc64',
+		'qemu_cpu': 'power7',
+		'hexstring': [ '7f454c46020201000000000000000000000200' ]
+	},
 }
 
 native_support = {
