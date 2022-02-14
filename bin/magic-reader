@@ -1,0 +1,16 @@
+#!/usr/bin/python3
+
+import os, sys, subprocess
+
+gitpath = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.git")
+if os.path.exists(gitpath):
+	# run from git repo
+	sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../modules"))
+
+from fchroot.binfmt import *
+
+if __name__ == "__main__":
+	hexstring = get_binary_hexstring(sys.argv[1])
+	print(hexstring)
+
+# vim: ts=4 sw=4 noet
