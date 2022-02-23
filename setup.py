@@ -12,7 +12,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://code.funtoo.org/bitbucket/users/drobbins/repos/fchroot/browse",
-    scripts=['bin/fchroot', 'bin/fchroot-simple'],
+    scripts=['bin/fchroot'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",
