@@ -1,6 +1,9 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
-import os, string
+import os
+import string
+import sys
+
 
 class QEMUException(Exception):
 	pass
@@ -14,22 +17,22 @@ qemu_arch_settings = {
 	'riscv-64bit': {
 		'qemu_binary': 'qemu-riscv64',
 		'qemu_cpu': 'sifive-u54',
-		'hexstring': [ '7f454c460201010000000000000000000200f3', '7f454c460201010000000000000000000300f3' ]
+		'hexstring': ['7f454c460201010000000000000000000200f3', '7f454c460201010000000000000000000300f3']
 	},
 	'arm-64bit': {
 		'qemu_binary': 'qemu-aarch64',
 		'qemu_cpu': 'cortex-a53',
-		'hexstring': [ '7f454c460201010000000000000000000200b7', '7f454c460201010000000000000000000300b7' ]
+		'hexstring': ['7f454c460201010000000000000000000200b7', '7f454c460201010000000000000000000300b7']
 	},
 	'arm-32bit': {
 		'qemu_binary': 'qemu-arm',
 		'qemu_cpu': 'cortex-a7',
-		'hexstring': [ '7f454c46010101000000000000000000020028', '7f454c46010101000000000000000000030028' ]
+		'hexstring': ['7f454c46010101000000000000000000020028', '7f454c46010101000000000000000000030028']
 	},
 	'powerpc-64bit': {
 		'qemu_binary': 'qemu-ppc64',
 		'qemu_cpu': 'power7',
-		'hexstring': [ '7f454c46020201000000000000000000000200' ]
+		'hexstring': ['7f454c46020201000000000000000000000200']
 	},
 }
 
@@ -83,6 +86,7 @@ qemu_binary_path = "/usr/bin"
 # Where our code will try to store our compiled qemu wrappers:
 wrapper_storage_path = "/usr/share/fchroot/wrappers"
 
+
 def native_arch_desc():
 	uname_arch = os.uname()[4]
 	if uname_arch in ["x86_64", "AMD64"]:
@@ -93,17 +97,22 @@ def native_arch_desc():
 		raise QEMUException("Arch of %s not recognized." % uname_arch)
 	return host_arch
 
+
 def qemu_path(arch_desc):
 	return os.path.join(qemu_binary_path, qemu_arch_settings[arch_desc]['qemu_binary'].lstrip("/"))
+
 
 def qemu_exists(arch_desc):
 	return os.path.exists(qemu_path(arch_desc))
 
+
 def wrapper_path(arch_desc):
 	return os.path.join(wrapper_storage_path, 'qemu-%s-wrapper' % arch_desc)
 
+
 def wrapper_exists(arch_desc):
 	return os.path.exists(wrapper_path(arch_desc))
+
 
 def supported_binfmts(native_arch_desc=None):
 	if native_arch_desc is None:
@@ -112,12 +121,14 @@ def supported_binfmts(native_arch_desc=None):
 		# TODO: return supported QEMU arch_descs specific to a native arch_desc.
 		return set()
 
+
 def get_arch_of_binary(path):
 	hexstring = get_binary_hexstring(path)
 	for arch_desc, arch_settings in qemu_arch_settings.items():
 		if hexstring in arch_settings['hexstring']:
 			return arch_desc
 	return None
+
 
 def get_binary_hexstring(path):
 	chunk_as_hexstring = ""
@@ -151,7 +162,7 @@ def register_binfmt(arch_desc, wrapper_bin):
 		raise QEMUWrapperException("Error: arch %s not recognized. Specify one of: %s.\n" % (arch_desc, ", ".join(supported_binfmts())))
 	hexcount = 0
 	for hexstring in qemu_arch_settings[arch_desc]['hexstring']:
-		local_arch_desc = arch_desc if hexcount == 0 else "%s-%s" % ( arch_desc, hexcount )
+		local_arch_desc = arch_desc if hexcount == 0 else "%s-%s" % (arch_desc, hexcount)
 		if os.path.exists("/proc/sys/fs/binfmt_misc/%s" % local_arch_desc):
 			sys.stderr.write("Warning: binary format %s already registered in /proc/sys/fs/binfmt_misc.\n" % local_arch_desc)
 		try:
@@ -170,4 +181,5 @@ def register_binfmt(arch_desc, wrapper_bin):
 		except (IOError, PermissionError) as e:
 			raise QEMUWrapperException("Was unable to write to /proc/sys/fs/binfmt_misc/register.")
 		hexcount += 1
+
 # vim: ts=4 sw=4 noet
