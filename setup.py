@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="fchroot",
-    version="0.2",
+    version="0.2.1",
     author="Daniel Robbins",
     author_email="drobbins@funtoo.org",
     description="Funtoo franken-chroot tool.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://code.funtoo.org/bitbucket/users/drobbins/repos/fchroot/browse",
-    scripts=['bin/fchroot'],
+    scripts=['bin/fchroot', 'bin/fchroot-simple'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",
