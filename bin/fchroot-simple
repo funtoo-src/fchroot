@@ -1,0 +1,103 @@
+#!/usr/bin/python3
+
+import os, sys, subprocess
+
+gitpath = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.git")
+if os.path.exists(gitpath):
+	# run from git repo
+	sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../modules"))
+
+from fchroot.binfmt import *
+
+simple_mode = os.path.basename(sys.argv[0]) == "fchroot-simple"
+if sys.stdout.isatty():
+	GREEN = '\033[92m'
+	CYAN = '\033[96m'
+	END = '\033[0m'
+else:
+	GREEN = ""
+	CYAN = ""
+	END = ""
+
+# TODO -- add --verbose option?
+
+if __name__ == "__main__":
+	if len(sys.argv) < 2 or not os.path.exists(sys.argv[1]):
+		sys.stderr.write("Please specify a chroot path as a first argument.\n")
+		sys.exit(1)
+
+	arch_desc = None
+
+	for binary in [ "bin/cp", "bin/ps", "bin/awk" ]:
+		binary_path = os.path.join(sys.argv[1], binary)
+		if os.path.exists(binary_path):
+			arch_desc = get_arch_of_binary(binary_path)
+			if arch_desc is None:
+				sys.stderr.write('Did not recognize chroot environment. Exiting.\n')
+				sys.exit(1)
+
+	if arch_desc is None:
+		sys.stderr.write("Could not find common binaries to scan in chroot environment. Exiting.\n")
+		sys.exit(1)
+
+	# ensure required qemu binary exists in /usr/bin
+	if not qemu_exists(arch_desc):
+		sys.stderr.write("Could not find qemu binary at %s. Exiting.\n" % qemu_path(arch_desc))
+		sys.exit(1)
+
+	# create /usr/local/bin in chroot if it doesn't exist
+	local_bin_path = os.path.join(sys.argv[1], "usr/local/bin")
+	if not os.path.exists(local_bin_path):
+		os.makedirs(local_bin_path)
+
+	# copy static qemu binary into chroot
+	chroot_qemu_path = os.path.join(sys.argv[1], "usr/local/bin/", qemu_arch_settings[arch_desc]["qemu_binary"])
+	if not os.path.exists(chroot_qemu_path):
+		result = subprocess.run(["/bin/cp", qemu_path(arch_desc), chroot_qemu_path])
+		if result.returncode != 0:
+			sys.stderr.write("Unable to copy qemu into chroot. Exiting.\n")
+			sys.exit(1)
+
+	# compile wrapper if it doesn't exist
+	if not wrapper_exists(arch_desc):
+		compile_wrapper(arch_desc)
+		if not wrapper_exists(arch_desc):
+			sys.stderr.write("Unable to compile wrapper. Exiting.\n")
+			sys.exit(1)
+
+	# copy wrapper into chroot
+	chroot_wrapper_path = os.path.join(sys.argv[1], "usr/local/bin/", "qemu-%s-wrapper" % arch_desc)
+	if not os.path.exists(chroot_wrapper_path):
+		result = subprocess.run(["/bin/cp", wrapper_path(arch_desc), chroot_wrapper_path])
+
+	# register binary format if it is not yet registered
+	if not is_binfmt_registered(arch_desc):
+		register_binfmt(arch_desc, wrapper_path(arch_desc))
+
+	# auto-mount any necessary things automatically as a convenience
+	mounts = {
+		"proc": ["/bin/mount", "-t", "proc", "proc"],
+		"sys": ["/bin/mount", "--rbind", "/sys"],
+		"dev": ["/bin/mount", "--rbind", "/dev"]
+	}
+
+	if simple_mode is False:
+		for mount, mount_cmd in mounts.items():
+			mount_point = os.path.join(sys.argv[1], mount)
+			if os.path.isdir(mount_point) and not os.path.ismount(mount_point):
+				mount_cmd = mount_cmd + [ mount_point ]
+				sys.stderr.write(GREEN + ">>>" + END + " Setting up /%s...\n" % mount)
+				result = subprocess.run(mount_cmd)
+				if result.returncode != 0:
+					sys.stderr.write("\nMount error.\n")
+					sys.exit(1)
+
+		# copy /etc/resolv.conf into chroot:
+		if os.path.exists("/etc/resolv.conf"):
+			subprocess.run(["/bin/cp", "/etc/resolv.conf", os.path.join(sys.argv[1], "etc")])
+
+	# spawn chroot - this will replace this process:
+	sys.stderr.write(GREEN + ">>> " + CYAN + arch_desc + END + GREEN + " frankenchroot B]" + END + "...\n")
+	os.execvp('/bin/chroot', ['/bin/chroot'] + sys.argv[1:])
+
+# vim: ts=4 sw=4 noet
