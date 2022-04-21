@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-
+import argparse
 import os
 import sys
 import subprocess
 
 gitpath = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.git")
 if os.path.exists(gitpath):
-	# run from git repo
-	sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../modules"))
+    # run from git repo
+    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../modules"))
 
 from fchroot.binfmt import *
 
@@ -17,130 +17,133 @@ verbose = False
 NICK = "##CODENAME##"
 VERSION = "##VERSION##"
 
-
 RED = ""
 GREEN = ""
 CYAN = ""
 END = ""
 
 if sys.stdout.isatty():
-	RED = '\033[31m'
-	GREEN = '\033[32m'
-	CYAN = '\033[36m'
-	END = '\033[0m'
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    CYAN = '\033[36m'
+    END = '\033[0m'
 
 
 def die(msg):
-	sys.stdout.write(msg + "\n")
-	sys.exit(1)
+    sys.stdout.write(msg + "\n")
+    sys.exit(1)
 
 
 def run_verbose(action, cmd_list):
-	result = subprocess.run(cmd_list)
-	action_out = (action+":").ljust(6)
-	if result.returncode == 0:
-		if verbose:
-			sys.stderr.write(GREEN + ">>>" + END + f" {action_out} {' '.join(cmd_list)}\n")
-	else:
-		sys.stderr.write(RED + "!!!" + END + f" {action_out} {' '.join(cmd_list)}\n")
+    result = subprocess.run(cmd_list)
+    action_out = (action + ":").ljust(6)
+    if result.returncode == 0:
+        if verbose:
+            sys.stderr.write(GREEN + ">>>" + END + f" {action_out} {' '.join(cmd_list)}\n")
+    else:
+        sys.stderr.write(RED + "!!!" + END + f" {action_out} {' '.join(cmd_list)}\n")
 
 
 def bind_mount(chroot_path, umount=False):
-	# auto-mount any necessary things automatically as a convenience
-	mounts = ["proc", "sys", "dev"]
-	for mount in mounts:
-		action = "MOUNT"
-		mount_point = os.path.join(chroot_path, mount)
-		if not os.path.isdir(mount_point):
-			die(f"Required chroot directory {chroot_path}/{mount} does not exist. Exiting.")
-		if umount:
-			action = "UMOUNT"
-			mount_cmd = ["/bin/umount", "-R", f"{chroot_path}/{mount}"]
-		else:
-			mount_cmd = ["/bin/mount", "--rbind", f"/{mount}", f"{chroot_path}/{mount}"]
-		if action == "MOUNT" and os.path.ismount(mount_point):
-			sys.stderr.write(GREEN + ">>>" + END + f" {action}: /{mount} (already mounted)\n")
-		else:
-			run_verbose(action, mount_cmd)
+    # auto-mount any necessary things automatically as a convenience
+    mounts = ["proc", "sys", "dev"]
+    for mount in mounts:
+        action = "MOUNT"
+        mount_point = os.path.join(chroot_path, mount)
+        if not os.path.isdir(mount_point):
+            die(f"Required chroot directory {chroot_path}/{mount} does not exist. Exiting.")
+        if umount:
+            action = "UMOUNT"
+            mount_cmd = ["/bin/umount", "-R", f"{chroot_path}/{mount}"]
+        else:
+            mount_cmd = ["/bin/mount", "--rbind", f"/{mount}", f"{chroot_path}/{mount}"]
+        if action == "MOUNT" and os.path.ismount(mount_point):
+            sys.stderr.write(GREEN + ">>>" + END + f" {action}: /{mount} (already mounted)\n")
+        else:
+            run_verbose(action, mount_cmd)
+
+
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("newroot", type=str)
+    ap.add_argument("--cpu", action="store", default=None)
+    return ap.parse_known_args()
 
 
 def main():
-	if len(sys.argv) < 2 or not os.path.exists(sys.argv[1]):
-		die("Please specify a chroot path as a first argument.")
+    args, commands = parse_args()
+    chroot_path = os.path.abspath(args.newroot)
+    binaries_to_scan = ["/bin/su", "/bin/cp", "/bin/ps", "/bin/awk", "/bin/bash"]
 
-	chroot_path = os.path.abspath(sys.argv[1])
+    if commands:
+        # Add the explicit thing we will be executing as something to scan to determine architecture:
+        binaries_to_scan = commands[:1] + binaries_to_scan
 
-	binaries_to_scan = ["/bin/su", "/bin/cp", "/bin/ps", "/bin/awk", "/bin/bash"]
+    arch_desc = None
+    for binary in binaries_to_scan:
+        binary_path = os.path.join(chroot_path, binary.lstrip('/'))
+        if os.path.exists(binary_path):
+            arch_desc = get_arch_of_binary(binary_path)
 
-	if len(sys.argv) > 2:
-		# Add the explicit thing we will be executing as something to scan to determine architecture:
-		binaries_to_scan = [sys.argv[2]] + binaries_to_scan
+    if arch_desc is None:
+        die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
 
-	arch_desc = None
-	for binary in binaries_to_scan:
-		binary_path = os.path.join(chroot_path, binary.lstrip('/'))
-		if os.path.exists(binary_path):
-			arch_desc = get_arch_of_binary(binary_path)
+    # ensure required qemu binary exists in /usr/bin
+    if not qemu_exists(arch_desc):
+        die(f"Couldn't find qemu binary at {qemu_path(arch_desc)} Exiting.")
 
-	if arch_desc is None:
-		die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
+    # create /usr/local/bin in chroot if it doesn't exist
+    local_bin_path = os.path.join(chroot_path, "usr/local/bin")
+    if not os.path.exists(local_bin_path):
+        os.makedirs(local_bin_path)
 
-	# ensure required qemu binary exists in /usr/bin
-	if not qemu_exists(arch_desc):
-		die(f"Couldn't find qemu binary at {qemu_path(arch_desc)} Exiting.")
+    # copy static qemu binary into chroot
+    chroot_qemu_path = os.path.join(chroot_path, "usr/local/bin/", qemu_arch_settings[arch_desc]["qemu_binary"])
+    if not os.path.exists(chroot_qemu_path):
+        result = subprocess.run(["/bin/cp", qemu_path(arch_desc), chroot_qemu_path])
+        if result.returncode != 0:
+            die("Unable to copy qemu into chroot. Exiting.")
 
-	# create /usr/local/bin in chroot if it doesn't exist
-	local_bin_path = os.path.join(chroot_path, "usr/local/bin")
-	if not os.path.exists(local_bin_path):
-		os.makedirs(local_bin_path)
+    # compile wrapper if it doesn't exist
+    if not wrapper_exists(arch_desc):
+        compile_wrapper(arch_desc)
+        if not wrapper_exists(arch_desc):
+            die("Unable to compile wrapper. Exiting.")
 
-	# copy static qemu binary into chroot
-	chroot_qemu_path = os.path.join(chroot_path, "usr/local/bin/", qemu_arch_settings[arch_desc]["qemu_binary"])
-	if not os.path.exists(chroot_qemu_path):
-		result = subprocess.run(["/bin/cp", qemu_path(arch_desc), chroot_qemu_path])
-		if result.returncode != 0:
-			die("Unable to copy qemu into chroot. Exiting.")
+    # copy wrapper into chroot
+    chroot_wrapper_path = os.path.join(chroot_path, "usr/local/bin/", "qemu-%s-wrapper" % arch_desc)
+    if not os.path.exists(chroot_wrapper_path):
+        result = subprocess.run(["/bin/cp", wrapper_path(arch_desc), chroot_wrapper_path])
 
-	# compile wrapper if it doesn't exist
-	if not wrapper_exists(arch_desc):
-		compile_wrapper(arch_desc)
-		if not wrapper_exists(arch_desc):
-			die("Unable to compile wrapper. Exiting.")
+    # register binary format if it is not yet registered
+    if not is_binfmt_registered(arch_desc):
+        register_binfmt(arch_desc, wrapper_path(arch_desc))
 
-	# copy wrapper into chroot
-	chroot_wrapper_path = os.path.join(chroot_path, "usr/local/bin/", "qemu-%s-wrapper" % arch_desc)
-	if not os.path.exists(chroot_wrapper_path):
-		result = subprocess.run(["/bin/cp", wrapper_path(arch_desc), chroot_wrapper_path])
+    if simple_mode is False:
+        # copy /etc/resolv.conf into chroot:
+        action = "DNS"
+        if os.path.exists("/etc/resolv.conf"):
+            cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
+            run_verbose(action, cmd_list)
 
-	# register binary format if it is not yet registered
-	if not is_binfmt_registered(arch_desc):
-		register_binfmt(arch_desc, wrapper_path(arch_desc))
-
-	if simple_mode is False:
-		# copy /etc/resolv.conf into chroot:
-		action = "DNS"
-		if os.path.exists("/etc/resolv.conf"):
-			cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
-			run_verbose(action, cmd_list)
-
-	bind_mount(chroot_path)
-	qemu_cpu = qemu_arch_settings[arch_desc]["qemu_cpu"]
-	sys.stderr.write(f"\nFuntoo fchroot {VERSION} (\"{NICK}\"); Copyright 2020-2022 Funtoo Solutions, Inc.\nLicensed under the Apache License, Version 2.0\n\n")
-	sys.stderr.write(GREEN + ">>> Entering " + CYAN + f"{arch_desc} ({qemu_cpu} CPU)" + END + " fchroot...\n")
-	args = [chroot_path] + sys.argv[2:]
-	if exec_mode:
-		# spawn chroot - this will replace this process:
-		os.execvp('/bin/chroot', ['/bin/chroot'] + args)
-	else:
-		# newer method where we wait in the background to undo the bind mounts.
-		result = subprocess.run(['/bin/chroot'] + args)
-		bind_mount(chroot_path, umount=True)
-		sys.stderr.write(CYAN + "<<< Exiting " + END + "fchroot.\n")
-		sys.exit(result)
+    bind_mount(chroot_path)
+    qemu_cpu = qemu_arch_settings[arch_desc]["qemu_cpu"]
+    sys.stderr.write(
+        f"\nFuntoo fchroot {VERSION} (\"{NICK}\"); Copyright 2020-2022 Funtoo Solutions, Inc.\nLicensed under the Apache License, Version 2.0\n\n")
+    sys.stderr.write(GREEN + ">>> Entering " + CYAN + f"{arch_desc} ({qemu_cpu} CPU)" + END + " fchroot...\n")
+    if exec_mode:
+        # spawn chroot - this will replace this process:
+        os.execvp('/bin/chroot', ['/bin/chroot'] + [args.newroot] + commands)
+    else:
+        env = {"PS1": '\\033[01;33mfchroot\\033[0m \\$ '}
+        # newer method where we wait in the background to undo the bind mounts.
+        result = subprocess.run(['/bin/chroot'] + [args.newroot] + commands, env=env)
+        bind_mount(chroot_path, umount=True)
+        sys.stderr.write(CYAN + "<<< Exiting " + END + "fchroot.\n")
+        sys.exit(result.returncode)
 
 
 if __name__ == "__main__":
-	main()
-
+    main()
 
 # vim: ts=4 sw=4 noet
