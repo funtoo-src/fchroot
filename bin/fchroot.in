@@ -78,6 +78,10 @@ args, commands = parse_args()
 def main():
     sys.stderr.write(
         f"\nFuntoo fchroot {VERSION} (\"{NICK}\"); Copyright 2020-2022 Funtoo Solutions, Inc.\nLicensed under the Apache License, Version 2.0\n\n")
+    if os.geteuid() != 0:
+        sys.stderr.write("You must be root to fchroot. Exiting.\n")
+        sys.exit(1)
+
     chroot_path = os.path.abspath(args.newroot)
     binaries_to_scan = ["/bin/su", "/bin/cp", "/bin/ps", "/bin/awk", "/bin/bash"]
 
