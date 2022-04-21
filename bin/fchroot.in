@@ -14,8 +14,8 @@ from fchroot.binfmt import *
 exec_mode = False
 simple_mode = os.path.basename(sys.argv[0]) == "fchroot-simple"
 verbose = False
-NICK = "Darth Elmo 2"
-VERSION = "0.2.2"
+NICK = "##CODENAME##"
+VERSION = "##VERSION##"
 
 
 RED = ""
@@ -133,9 +133,10 @@ def main():
 		os.execvp('/bin/chroot', ['/bin/chroot'] + args)
 	else:
 		# newer method where we wait in the background to undo the bind mounts.
-		subprocess.run(['/bin/chroot'] + args)
+		result = subprocess.run(['/bin/chroot'] + args)
 		bind_mount(chroot_path, umount=True)
 		sys.stderr.write(CYAN + "<<< Exiting " + END + "fchroot.\n")
+		sys.exit(result)
 
 
 if __name__ == "__main__":
