@@ -13,6 +13,7 @@ prep() {
 		-e "s/##CODENAME##/$CODENAME/g" \
 		${x}.in > ${x}
 	done
+	chmod 0755 bin/fchroot
 	for x in man/*.rst; do
 		cat $x | rst2man.py > ${x%.rst}
     done
