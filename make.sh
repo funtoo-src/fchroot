@@ -13,7 +13,7 @@ prep() {
 	cd ..
 	sed -i -e "s/##VERSION##/$VERSION/g" \
 	-e "s/##CODENAME##/$CODENAME/g" \
-	bin/fchroot
+	bin/fchroot setup.py
 }
 
 commit() {
