@@ -16,32 +16,6 @@ verbose = False
 NICK = "##CODENAME##"
 VERSION = "##VERSION##"
 
-RED = ""
-GREEN = ""
-CYAN = ""
-END = ""
-
-if sys.stdout.isatty():
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    CYAN = '\033[36m'
-    END = '\033[0m'
-
-
-def die(msg):
-    sys.stdout.write(msg + "\n")
-    sys.exit(1)
-
-
-def run_verbose(action, cmd_list):
-    result = subprocess.run(cmd_list)
-    action_out = (action + ":").ljust(6)
-    if result.returncode == 0:
-        if args.verbose:
-            sys.stderr.write(GREEN + f"{' '.join(cmd_list)}" + END + "\n")
-    else:
-        sys.stderr.write(RED + "!!!" + END + f" {action_out}: {' '.join(cmd_list)}\n")
-
 
 def bind_mount(chroot_path, umount=False):
     # auto-mount any necessary things automatically as a convenience
@@ -60,19 +34,6 @@ def bind_mount(chroot_path, umount=False):
             sys.stderr.write(GREEN + f" {action}: /{mount} (already mounted)\n")
         else:
             run_verbose(action, mount_cmd)
-
-
-def parse_args():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("newroot", type=str)
-    ap.add_argument("--verbose", "-v", action="store_true")
-    ap.add_argument("--preserve-env", action="store_true", default=False,
-                    help="Preserve the current environment settings rather than wiping them by default.")
-    ap.add_argument("--cpu", action="store", default=None, help="Specify specific CPU type for QEMU to use")
-    return ap.parse_known_args()
-
-
-args, commands = parse_args()
 
 
 def main():
@@ -98,34 +59,28 @@ def main():
     if arch_desc is None:
         die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
 
-    # ensure required qemu binary exists in /usr/bin
+    # ensure required qemu binary exists in /usr/bin on host:
     if not qemu_exists(arch_desc):
         die(f"Couldn't find qemu binary at {qemu_path(arch_desc)} Exiting.")
 
-    # create /usr/local/bin in chroot if it doesn't exist
+    # create /usr/local/bin in chroot if it doesn't exist:
     local_bin_path = os.path.join(chroot_path, "usr/local/bin")
     if not os.path.exists(local_bin_path):
         os.makedirs(local_bin_path)
 
-    # copy static qemu binary into chroot
+    # copy static qemu binary into chroot from host:
     chroot_qemu_path = os.path.join(chroot_path, "usr/local/bin/", qemu_arch_settings[arch_desc]["qemu_binary"])
     if not os.path.exists(chroot_qemu_path):
         result = subprocess.run(["/bin/cp", qemu_path(arch_desc), chroot_qemu_path])
         if result.returncode != 0:
             die("Unable to copy qemu into chroot. Exiting.")
 
-    # compile wrapper if it doesn't exist
-    if not wrapper_exists(arch_desc):
-        compile_wrapper(arch_desc)
-        if not wrapper_exists(arch_desc):
-            die("Unable to compile wrapper. Exiting.")
+    # create C wrapper, and compile it. Both will end up in /usr/local/bin inside chroot:
+    chroot_wrapper_path = os.path.join(chroot_path, "usr/local/bin")
+    os.makedirs(chroot_wrapper_path, exist_ok=True)
+    compile_wrapper(arch_desc, chroot_wrapper_path, qemu_cpu=args.cpu)
 
-    # copy wrapper into chroot
-    chroot_wrapper_path = os.path.join(chroot_path, "usr/local/bin/", "qemu-%s-wrapper" % arch_desc)
-    if not os.path.exists(chroot_wrapper_path):
-        result = subprocess.run(["/bin/cp", wrapper_path(arch_desc), chroot_wrapper_path])
-
-    # register binary format if it is not yet registered
+    # register binary format if it is not yet registered:
     if not is_binfmt_registered(arch_desc):
         register_binfmt(arch_desc, wrapper_path(arch_desc))
 
@@ -136,7 +91,7 @@ def main():
         run_verbose(action, cmd_list)
 
     bind_mount(chroot_path)
-    qemu_cpu = qemu_arch_settings[arch_desc]["qemu_cpu"]
+    qemu_cpu = args.cpu if args.cpu else qemu_arch_settings[arch_desc]["qemu_cpu"]
     sys.stderr.write(GREEN + ">>> Entering " + CYAN + f"{arch_desc} ({qemu_cpu} CPU)" + END + " fchroot...\n")
     if args.preserve_env:
         env = os.environ

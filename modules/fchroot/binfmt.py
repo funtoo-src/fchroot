@@ -3,7 +3,7 @@
 import os
 import string
 import sys
-
+from fchroot.common import *
 
 class QEMUException(Exception):
 	pass
@@ -44,7 +44,7 @@ native_support = {
 }
 
 
-def compile_wrapper(qemu_arch):
+def compile_wrapper(qemu_arch, out_path, qemu_cpu=None):
 	"""
 	Compiles a QEMU wrapper using gcc. Will raise QEMUWrapperException if any error is encountered along the way.
 	:param qemu_arch: arch to build for -- should be 'arm-64bit' or 'arm-32bit' at the moment.
@@ -65,20 +65,19 @@ int main(int argc, char **argv, char **envp) {{
 	return execve("/usr/local/bin/{qemu_binary}", newargv, envp);
 }}
 	"""
-	if not os.path.exists(wrapper_storage_path):
-		try:
-			os.makedirs(wrapper_storage_path)
-		except PermissionError:
-			raise QEMUWrapperException("Unable to create path to store wrappers: %s" % wrapper_storage_path)
-	try:
-		with open(os.path.join(wrapper_storage_path, "qemu-%s-wrapper.c" % qemu_arch), "w") as f:
-			f.write(wrapper_code.format(**qemu_arch_settings[qemu_arch]))
-		retval = os.system("cd {wrapper_path}; gcc -static -O2 -s -o qemu-{qemu_arch}-wrapper qemu-{qemu_arch}-wrapper.c".format(wrapper_path=wrapper_storage_path, qemu_arch=qemu_arch))
-		if retval != 0:
-			raise QEMUWrapperException("Compilation failed.")
-	except (IOError, PermissionError) as e:
-		raise QEMUWrapperException(str(e))
 
+	qemu_binary = qemu_arch_settings[qemu_arch]["qemu_binary"]
+	qemu_cpu = qemu_cpu if qemu_cpu is not None else qemu_arch_settings[qemu_arch]["qemu_cpu"]
+
+	with open(os.path.join(out_path, "qemu-%s-wrapper.c" % qemu_arch), "w") as f:
+		f.write(wrapper_code.format(qemu_binary=qemu_binary, qemu_cpu=qemu_cpu))
+	retval = run_verbose("wrapper",
+				["gcc", "-static", "-O2", "-s", "-o",
+					f"{out_path}/qemu-{qemu_arch}-wrapper",
+					f"{out_path}/qemu-{qemu_arch}-wrapper.c"]
+			)
+	if retval != 0:
+		raise QEMUWrapperException("Compilation failed.")
 
 # Where our stuff will look for qemu binaries:
 qemu_binary_path = "/usr/bin"
