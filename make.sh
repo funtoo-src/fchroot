@@ -7,13 +7,15 @@ prep() {
 	install -d dist
 	rm -f dist/fchroot-$VERSION*
 	cd man
-	for x in *.rst; do
-	    cat $x | sed -e "s/##VERSION##/$VERSION/g" | rst2man.py > ${x%.rst}
-    done
 	cd ..
-	sed -i -e "s/##VERSION##/$VERSION/g" \
-	-e "s/##CODENAME##/$CODENAME/g" \
-	bin/fchroot setup.py
+	for x in man/*.rst.in bin/fchroot setup.py; do
+		sed -i -e "s/##VERSION##/$VERSION/g" \
+		-e "s/##CODENAME##/$CODENAME/g" \
+		${x}.in > ${x}
+	done
+	for x in man/*.rst; do
+	    cat $x | rst2man.py > ${x%.rst}
+    done
 }
 
 commit() {
