@@ -12,7 +12,6 @@ if os.path.exists(gitpath):
 from fchroot.binfmt import *
 
 exec_mode = False
-simple_mode = os.path.basename(sys.argv[0]) == "fchroot-simple"
 verbose = False
 NICK = "##CODENAME##"
 VERSION = "##VERSION##"
@@ -38,10 +37,10 @@ def run_verbose(action, cmd_list):
     result = subprocess.run(cmd_list)
     action_out = (action + ":").ljust(6)
     if result.returncode == 0:
-        if verbose:
-            sys.stderr.write(GREEN + ">>>" + END + f" {action_out} {' '.join(cmd_list)}\n")
+        if args.verbose:
+            sys.stderr.write(GREEN + f"{' '.join(cmd_list)}" + END + "\n")
     else:
-        sys.stderr.write(RED + "!!!" + END + f" {action_out} {' '.join(cmd_list)}\n")
+        sys.stderr.write(RED + "!!!" + END + f" {action_out}: {' '.join(cmd_list)}\n")
 
 
 def bind_mount(chroot_path, umount=False):
@@ -53,12 +52,12 @@ def bind_mount(chroot_path, umount=False):
         if not os.path.isdir(mount_point):
             die(f"Required chroot directory {chroot_path}/{mount} does not exist. Exiting.")
         if umount:
-            action = "UMOUNT"
+            action = "umount"
             mount_cmd = ["/bin/umount", "-R", f"{chroot_path}/{mount}"]
         else:
             mount_cmd = ["/bin/mount", "--rbind", f"/{mount}", f"{chroot_path}/{mount}"]
-        if action == "MOUNT" and os.path.ismount(mount_point):
-            sys.stderr.write(GREEN + ">>>" + END + f" {action}: /{mount} (already mounted)\n")
+        if action == "mount" and os.path.ismount(mount_point):
+            sys.stderr.write(GREEN + f" {action}: /{mount} (already mounted)\n")
         else:
             run_verbose(action, mount_cmd)
 
@@ -66,12 +65,19 @@ def bind_mount(chroot_path, umount=False):
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("newroot", type=str)
-    ap.add_argument("--cpu", action="store", default=None)
+    ap.add_argument("--verbose", "-v", action="store_true")
+    ap.add_argument("--preserve-env", action="store_true", default=False,
+                    help="Preserve the current environment settings rather than wiping them by default.")
+    ap.add_argument("--cpu", action="store", default=None, help="Specify specific CPU type for QEMU to use")
     return ap.parse_known_args()
 
 
+args, commands = parse_args()
+
+
 def main():
-    args, commands = parse_args()
+    sys.stderr.write(
+        f"\nFuntoo fchroot {VERSION} (\"{NICK}\"); Copyright 2020-2022 Funtoo Solutions, Inc.\nLicensed under the Apache License, Version 2.0\n\n")
     chroot_path = os.path.abspath(args.newroot)
     binaries_to_scan = ["/bin/su", "/bin/cp", "/bin/ps", "/bin/awk", "/bin/bash"]
 
@@ -119,28 +125,28 @@ def main():
     if not is_binfmt_registered(arch_desc):
         register_binfmt(arch_desc, wrapper_path(arch_desc))
 
-    if simple_mode is False:
-        # copy /etc/resolv.conf into chroot:
-        action = "DNS"
-        if os.path.exists("/etc/resolv.conf"):
-            cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
-            run_verbose(action, cmd_list)
+    # copy /etc/resolv.conf into chroot:
+    action = "DNS"
+    if os.path.exists("/etc/resolv.conf"):
+        cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
+        run_verbose(action, cmd_list)
 
     bind_mount(chroot_path)
     qemu_cpu = qemu_arch_settings[arch_desc]["qemu_cpu"]
-    sys.stderr.write(
-        f"\nFuntoo fchroot {VERSION} (\"{NICK}\"); Copyright 2020-2022 Funtoo Solutions, Inc.\nLicensed under the Apache License, Version 2.0\n\n")
     sys.stderr.write(GREEN + ">>> Entering " + CYAN + f"{arch_desc} ({qemu_cpu} CPU)" + END + " fchroot...\n")
-    if exec_mode:
-        # spawn chroot - this will replace this process:
-        os.execvp('/bin/chroot', ['/bin/chroot'] + [args.newroot] + commands)
+    if args.preserve_env:
+        env = os.environ
     else:
-        env = {"PS1": '\\033[01;33mfchroot\\033[0m \\$ '}
-        # newer method where we wait in the background to undo the bind mounts.
-        result = subprocess.run(['/bin/chroot'] + [args.newroot] + commands, env=env)
-        bind_mount(chroot_path, umount=True)
-        sys.stderr.write(CYAN + "<<< Exiting " + END + "fchroot.\n")
-        sys.exit(result.returncode)
+        env_whitelist = ["TERM"]
+        env = {}
+        for item in env_whitelist:
+            env[item] = os.environ[item]
+    env.update({"PS1": '\\033[01;33mfchroot\\033[0m \\$ '})
+    # newer method where we wait in the background to undo the bind mounts.
+    result = subprocess.run(['/bin/chroot'] + [args.newroot] + commands, env=env)
+    bind_mount(chroot_path, umount=True)
+    sys.stderr.write(CYAN + "<<< Exiting " + END + "fchroot.\n")
+    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":
