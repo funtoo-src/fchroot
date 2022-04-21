@@ -8,13 +8,13 @@ prep() {
 	rm -f dist/fchroot-$VERSION*
 	cd man
 	cd ..
-	for x in man/*.rst bin/fchroot setup.py; do
+	for x in man/fchroot.1.rst bin/fchroot setup.py; do
 		sed -i -e "s/##VERSION##/$VERSION/g" \
 		-e "s/##CODENAME##/$CODENAME/g" \
 		${x}.in > ${x}
 	done
 	for x in man/*.rst; do
-	    cat $x | rst2man.py > ${x%.rst}
+		cat $x | rst2man.py > ${x%.rst}
     done
 }
 
