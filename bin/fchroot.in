@@ -14,8 +14,8 @@ from fchroot.binfmt import *
 exec_mode = False
 simple_mode = os.path.basename(sys.argv[0]) == "fchroot-simple"
 verbose = False
-NICK = "##CODENAME##"
-VERSION = "##VERSION##"
+NICK = "Darth Elmo 2"
+VERSION = "0.2.2"
 
 
 RED = ""

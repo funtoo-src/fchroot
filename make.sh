@@ -9,7 +9,7 @@ prep() {
 	cd man
 	cd ..
 	for x in man/fchroot.1.rst bin/fchroot setup.py; do
-		sed -i -e "s/##VERSION##/$VERSION/g" \
+		sed -e "s/##VERSION##/$VERSION/g" \
 		-e "s/##CODENAME##/$CODENAME/g" \
 		${x}.in > ${x}
 	done
