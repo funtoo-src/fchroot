@@ -1,0 +1,38 @@
+=======
+fchroot
+=======
+
+---------------------------------------------
+Funtoo Linux System Management Meta-Command
+---------------------------------------------
+
+:Author: Daniel Robbins <drobbins@funtoo.org>
+:Version: ##VERSION##
+:Manual section: 1
+:Manual group: Funtoo Linux Core System
+
+SYNOPSIS
+--------
+
+``fchroot``, also known as "Franken-Chroot" or "Funtoo Chroot", is a utility
+that helps you to leverage the magic of QEMU to chroot into a non-native
+system. For example, on your x86-compatible 64-bit PC, it is possible to chroot
+into a 32-bit or 64-bit foreign architecture root filesystem and have it
+actually work.
+
+This is accomplished by leveraging the "binfmt-misc" functionality built-in to
+the Linux kernel, combined with QEMU to perform emulation of non-native
+instruction sets. ``fchroot`` itself doesn't do any magic except provide a very
+easy-to-use mechanism to get this to work, typically requiring little or no
+manual configuration. You simply run ``fchroot`` just like ``chroot``, and
+everything works.
+
+``fchroot`` currently supports running on an x86-64bit platform, although in
+theory there is no reason why it would not work on other architectures -- this
+is just not currently tested. ``fchroot`` then allows you to "enter" arm-32bit,
+arm-64bit (aarch64), riscv-64bit and powerpc-64bit chroots.
+
+LICENSE
+--------
+
+.. include:: ../COPYRIGHT.txt
