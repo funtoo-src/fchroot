@@ -35,4 +35,4 @@ arm-64bit (aarch64), riscv-64bit and powerpc-64bit chroots.
 LICENSE
 --------
 
-.. include:: ../COPYRIGHT.txt
+.. include:: COPYRIGHT.txt
