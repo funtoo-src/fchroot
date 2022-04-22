@@ -7,7 +7,7 @@ import subprocess
 gitpath = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.git")
 if os.path.exists(gitpath):
     # run from git repo
-    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../modules"))
+    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), ".."))
 
 from fchroot.binfmt import *
 
