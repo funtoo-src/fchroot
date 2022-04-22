@@ -38,7 +38,7 @@ def bind_mount(chroot_path, umount=False):
 
 def main():
     sys.stderr.write(
-        f"\nFuntoo fchroot {VERSION} (\"{NICK}\"); Copyright 2020-2022 Funtoo Solutions, Inc.\nLicensed under the Apache License, Version 2.0\n\n")
+        f"\nFuntoo fchroot {VERSION} (\"{NICK}\")\nCopyright 2020-2022 Funtoo Solutions, Inc.; Licensed under the Apache License, Version 2.0\n\n")
     if os.geteuid() != 0:
         sys.stderr.write("You must be root to fchroot. Exiting.\n")
         sys.exit(1)
@@ -82,7 +82,7 @@ def main():
 
     # register binary format if it is not yet registered:
     if not is_binfmt_registered(arch_desc):
-        register_binfmt(arch_desc, wrapper_path(arch_desc))
+        register_binfmt(arch_desc, chroot_qemu_path)
 
     # copy /etc/resolv.conf into chroot:
     action = "DNS"

@@ -2,8 +2,9 @@
 
 import os
 import string
-import sys
+
 from fchroot.common import *
+
 
 class QEMUException(Exception):
 	pass
@@ -82,9 +83,6 @@ int main(int argc, char **argv, char **envp) {{
 # Where our stuff will look for qemu binaries:
 qemu_binary_path = "/usr/bin"
 
-# Where our code will try to store our compiled qemu wrappers:
-wrapper_storage_path = "/usr/share/fchroot/wrappers"
-
 
 def native_arch_desc():
 	uname_arch = os.uname()[4]
@@ -103,14 +101,6 @@ def qemu_path(arch_desc):
 
 def qemu_exists(arch_desc):
 	return os.path.exists(qemu_path(arch_desc))
-
-
-def wrapper_path(arch_desc):
-	return os.path.join(wrapper_storage_path, 'qemu-%s-wrapper' % arch_desc)
-
-
-def wrapper_exists(arch_desc):
-	return os.path.exists(wrapper_path(arch_desc))
 
 
 def supported_binfmts(native_arch_desc=None):
