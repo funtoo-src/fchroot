@@ -20,10 +20,6 @@ prep() {
 }
 
 commit() {
-	cd doc
-	git add *.[1-8]
-	cd ..
-	git commit -a -m "$VERSION distribution release"
 	git tag -f "$VERSION"
 	git push
 	git push --tags
