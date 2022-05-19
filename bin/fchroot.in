@@ -27,7 +27,7 @@ def bind_mount(chroot_path, umount=False):
             die(f"Required chroot directory {chroot_path}/{mount} does not exist. Exiting.")
         if umount:
             action = "umount"
-            mount_cmd = ["/bin/umount", "-R", f"{chroot_path}/{mount}"]
+            mount_cmd = ["/bin/umount", "-R", "--lazy", f"{chroot_path}/{mount}"]
         else:
             mount_cmd = ["/bin/mount", "--rbind", f"/{mount}", f"{chroot_path}/{mount}"]
         if action == "mount" and os.path.ismount(mount_point):
