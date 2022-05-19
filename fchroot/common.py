@@ -21,15 +21,21 @@ def die(msg):
     sys.exit(1)
 
 
-def run_verbose(action, cmd_list):
+def run_verbose(action, cmd_list, badval=None):
     result = subprocess.run(cmd_list)
     action_out = (action + ":").ljust(6)
-    if result.returncode == 0:
-        if args.verbose:
-            sys.stderr.write(GREEN + f"{' '.join(cmd_list)}" + END + "\n")
+    success = False
+
+    if badval:
+        if result.returncode != badval:
+            success = True
+    elif result.returncode == 0:
+        success = True
+    if success:
+        sys.stderr.write(GREEN + f"{' '.join(cmd_list)}" + END + "\n")
     else:
         sys.stderr.write(RED + "!!!" + END + f" {action_out}: {' '.join(cmd_list)}\n")
-    return result.returncode
+    return success
 
 
 def parse_args():

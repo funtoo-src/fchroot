@@ -77,12 +77,12 @@ int main(int argc, char **argv, char **envp) {{
 
 	with open(os.path.join(out_path, "qemu-%s-wrapper.c" % qemu_arch), "w") as f:
 		f.write(wrapper_code.format(qemu_binary=qemu_binary, qemu_cpu=qemu_cpu))
-	retval = run_verbose("wrapper",
+	success = run_verbose("wrapper",
 				["gcc", "-static", "-O2", "-s", "-o",
 					f"{out_path}/qemu-{qemu_arch}-wrapper",
 					f"{out_path}/qemu-{qemu_arch}-wrapper.c"]
 			)
-	if retval != 0:
+	if not success:
 		raise QEMUWrapperException("Compilation failed.")
 
 # Where our stuff will look for qemu binaries:
