@@ -35,6 +35,11 @@ qemu_arch_settings = {
 		'qemu_cpu': 'power7',
 		'hexstring': ['7f454c46020201000000000000000000000200']
 	},
+	'x86-64bit': {
+		'qemu-binary': 'qemu-x86_64',
+		'qemu_cpu': 'max',
+		'hexstring': ['7f454c4602010100000000000000000003003e']
+	}
 }
 
 native_support = {
@@ -170,5 +175,32 @@ def register_binfmt(arch_desc, wrapper_bin):
 		except (IOError, PermissionError) as e:
 			raise QEMUWrapperException("Was unable to write to /proc/sys/fs/binfmt_misc/register.")
 		hexcount += 1
+
+
+def setup_wrapper(chroot_path, arch_desc):
+	# ensure required qemu binary exists in /usr/bin on host:
+	if not qemu_exists(arch_desc):
+		die(f"Couldn't find qemu binary at {qemu_path(arch_desc)} Exiting.")
+
+	# create /usr/local/bin in chroot if it doesn't exist:
+	local_bin_path = os.path.join(chroot_path, "usr/local/bin")
+	if not os.path.exists(local_bin_path):
+		os.makedirs(local_bin_path)
+
+	# copy static qemu binary into chroot from host:
+	chroot_qemu_path = os.path.join(chroot_path, "usr/local/bin/", qemu_arch_settings[arch_desc]["qemu_binary"])
+	if not os.path.exists(chroot_qemu_path):
+		result = subprocess.run(["/bin/cp", qemu_path(arch_desc), chroot_qemu_path])
+		if result.returncode != 0:
+			die("Unable to copy qemu into chroot. Exiting.")
+
+	# create C wrapper, and compile it. Both will end up in /usr/local/bin inside chroot:
+	chroot_wrapper_path = os.path.join(chroot_path, "usr/local/bin")
+	os.makedirs(chroot_wrapper_path, exist_ok=True)
+	compile_wrapper(arch_desc, chroot_wrapper_path, qemu_cpu=args.cpu)
+
+	# register binary format if it is not yet registered:
+	if not is_binfmt_registered(arch_desc):
+		register_binfmt(arch_desc, chroot_qemu_path)
 
 # vim: ts=4 sw=4 noet
