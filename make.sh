@@ -8,7 +8,11 @@ prep() {
 	rm -f dist/fchroot-$VERSION*
 	cd man
 	cd ..
-	for x in man/fchroot.1.rst bin/fchroot setup.py; do
+	cat > fchroot/version.py << EOF
+__version__ = "$VERSION"
+__codename__ = "$CODENAME"
+EOF
+	for x in man/fchroot.1.rst setup.py; do
 		sed -e "s/##VERSION##/$VERSION/g" \
 		-e "s/##CODENAME##/$CODENAME/g" \
 		${x}.in > ${x}

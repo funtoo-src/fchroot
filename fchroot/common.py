@@ -2,6 +2,8 @@ import argparse
 import subprocess
 import sys
 
+from .version import __version__, __codename__
+
 RED = ""
 GREEN = ""
 CYAN = ""
@@ -32,6 +34,7 @@ def run_verbose(action, cmd_list):
 
 def parse_args():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--version', action='version', version=f"fchroot {__version__} ({__codename__})")
     ap.add_argument("newroot", type=str)
     ap.add_argument("--verbose", "-v", action="store_true")
     ap.add_argument("--preserve-env", action="store_true", default=False,
