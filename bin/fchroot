@@ -54,7 +54,8 @@ def main():
         cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
         common.run_verbose(action, cmd_list)
 
-    bind_mount(chroot_path)
+    if not common.args.nobind:
+        common.bind_mount(chroot_path)
     qemu_cpu = common.args.cpu if common.args.cpu else binfmt.qemu_arch_settings[arch_desc]["qemu_cpu"]
 
     if arch_desc != native_arch:
@@ -72,7 +73,8 @@ def main():
     env.update({"PS1": '\\033[01;33mfchroot\\033[0m \\$ '})
     # newer method where we wait in the background to undo the bind mounts.
     result = subprocess.run(['/bin/chroot'] + [common.args.newroot] + common.commands, env=env)
-    bind_mount(chroot_path, umount=True)
+    if not common.args.nobind:
+        common.bind_mount(chroot_path, umount=True)
     sys.stderr.write(common.CYAN + "<<< Exiting " + common.END + "fchroot.\n")
     sys.exit(result.returncode)
 
