@@ -6,8 +6,8 @@ import sys
 
 gitpath = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.git")
 if os.path.exists(gitpath):
-    # run from git repo
-    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), ".."))
+	# run from git repo
+	sys.path.append(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), ".."))
 
 import fchroot.common as common
 import fchroot.binfmt as binfmt
@@ -16,70 +16,78 @@ from fchroot.version import __version__, __codename__
 exec_mode = False
 verbose = False
 
+
 def main():
-    sys.stderr.write(
-        f"\nFuntoo fchroot {__version__} (\"{__codename__}\")\nCopyright 2020-2022 Funtoo Solutions, Inc.; Licensed under the Apache License, Version 2.0\n\n")
-    if os.geteuid() != 0:
-        sys.stderr.write("You must be root to fchroot. Exiting.\n")
-        sys.exit(1)
+	sys.stderr.write(
+		f"\nFuntoo fchroot {__version__} (\"{__codename__}\")\nCopyright 2020-2022 Funtoo Solutions, Inc.; Licensed under the Apache License, Version 2.0\n\n")
+	if os.geteuid() != 0:
+		sys.stderr.write("You must be root to fchroot. Exiting.\n")
+		sys.exit(1)
 
-    chroot_path = os.path.abspath(common.args.newroot)
-    binaries_to_scan = ["/bin/su", "/bin/cp", "/bin/ps", "/bin/awk", "/bin/bash"]
+	chroot_path = os.path.abspath(common.args.newroot)
+	binaries_to_scan = ["/bin/su", "/bin/bash"]
 
-    if common.commands:
-        # Add the explicit thing we will be executing as something to scan to determine architecture:
-        binaries_to_scan = common.commands[:1] + binaries_to_scan
+	if common.commands:
+		# Add the explicit thing we will be executing as something to scan to determine architecture:
+		binaries_to_scan = common.commands[:1] + binaries_to_scan
 
-    arch_desc = None
-    for binary in binaries_to_scan:
-        binary_path = os.path.join(chroot_path, binary.lstrip('/'))
-        if os.path.exists(binary_path):
-            arch_desc = binfmt.get_arch_of_binary(binary_path)
-            if arch_desc:
-                break
+	arch_desc = None
+	binary_found = None
+	for binary in binaries_to_scan:
+		binary_path = os.path.join(chroot_path, binary.lstrip('/'))
+		if os.path.exists(binary_path):
+			binary_found = binary
+			arch_desc = binfmt.get_arch_of_binary(binary_path)
+			if arch_desc:
+				break
 
-    if arch_desc is None:
-        common.die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
-    logging.debug(f"Detected arch: {arch_desc}")
-    native_arch = binfmt.native_arch_desc()
-    logging.debug(f"Native arch: {native_arch}")
+	if arch_desc is None:
+		common.die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
+	logging.debug(f"Detected arch: {arch_desc}")
+	native_arch = binfmt.native_arch_desc()
+	logging.debug(f"Native arch: {native_arch}")
 
-    if arch_desc != native_arch:
-        binfmt.setup_wrapper(chroot_path, arch_desc)
+	if arch_desc != native_arch:
+		binfmt.setup_wrapper(chroot_path, arch_desc)
 
-    # copy /etc/resolv.conf into chroot:
-    action = "DNS"
-    if os.path.exists("/etc/resolv.conf"):
-        cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
-        common.run_verbose(action, cmd_list)
+	# copy /etc/resolv.conf into chroot:
+	action = "DNS"
+	if os.path.exists("/etc/resolv.conf"):
+		cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
+		common.run_verbose(action, cmd_list)
 
-    if not common.args.nobind:
-        common.bind_mount(chroot_path)
-    qemu_cpu = common.args.cpu if common.args.cpu else binfmt.qemu_arch_settings[arch_desc]["qemu_cpu"]
+	if not common.args.nobind:
+		common.bind_mount(chroot_path)
+	qemu_cpu = common.args.cpu if common.args.cpu else binfmt.qemu_arch_settings[arch_desc]["qemu_cpu"]
 
-    if arch_desc != native_arch:
-        sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{arch_desc} ({qemu_cpu} CPU)" + common.END + " fchroot...\n")
-    else:
-        sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{arch_desc} (native)" + common.END + " fchroot...\n")
+	if arch_desc != native_arch:
+		sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{arch_desc} ({qemu_cpu} CPU)" + common.END + " fchroot...\n")
+	else:
+		sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{arch_desc} (native)" + common.END + " fchroot...\n")
 
-    if common.args.preserve_env:
-        env = os.environ
-    else:
-        env_whitelist = ["TERM"]
-        env = {}
-        for item in env_whitelist:
-            if item in os.environ:
-                env[item] = os.environ[item]
-    env.update({"PS1": '\\033[01;33mfchroot\\033[0m \\$ '})
-    # newer method where we wait in the background to undo the bind mounts.
-    result = subprocess.run(['/bin/chroot'] + [common.args.newroot] + common.commands, env=env)
-    if not common.args.nobind:
-        common.bind_mount(chroot_path, umount=True)
-    sys.stderr.write(common.CYAN + "<<< Exiting " + common.END + "fchroot.\n")
-    sys.exit(result.returncode)
+	if common.args.preserve_env:
+		env = os.environ
+	else:
+		env_whitelist = ["TERM"]
+		env = {}
+		for item in env_whitelist:
+			if item in os.environ:
+				env[item] = os.environ[item]
+	env.update({"PS1": '\\033[01;33mfchroot\\033[0m \\$ '})
+	# newer method where we wait in the background to undo the bind mounts.
+	if common.commands:
+		commands = common.commands
+	else:
+		# call /bin/bash --login or /bin/su --login directly to set up environment properly.
+		commands = [binary_found, "--login"]
+	result = subprocess.run(['/bin/chroot'] + [common.args.newroot] + common.commands, env=env)
+	if not common.args.nobind:
+		common.bind_mount(chroot_path, umount=True)
+	sys.stderr.write(common.CYAN + "<<< Exiting " + common.END + "fchroot.\n")
+	sys.exit(result.returncode)
 
 
 if __name__ == "__main__":
-    main()
+	main()
 
 # vim: ts=4 sw=4 noet
