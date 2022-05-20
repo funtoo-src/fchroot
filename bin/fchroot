@@ -43,7 +43,6 @@ def main():
         common.die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
 
     native_arch = binfmt.native_arch_desc()
-    print(arch_desc, native_arch)
 
     if arch_desc != native_arch:
         binfmt.setup_wrapper(chroot_path, arch_desc)

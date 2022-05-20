@@ -97,6 +97,7 @@ def bind_mount(chroot_path, umount=False):
 
     for recurse, bind_groups in (True, global_binds), (False, local_binds):
         for src, dest in bind_groups.items():
+            dest = dest.lstrip("/")
             dest_abs = os.path.join(chroot_path, dest)
             if umount:
                 action = "umount"
