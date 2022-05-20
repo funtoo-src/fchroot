@@ -1,9 +1,11 @@
 import argparse
+import logging
 import os
 import subprocess
 import sys
 
 from .version import __version__, __codename__
+
 
 RED = ""
 GREEN = ""
@@ -73,6 +75,7 @@ def parse_args():
     ap.add_argument('--version', action='version', version=f"fchroot {__version__} ({__codename__})")
     ap.add_argument("newroot", type=str)
     ap.add_argument("--verbose", "-v", action="store_true")
+    ap.add_argument("--debug", action="store_true")
     ap.add_argument("--preserve-env", action="store_true", default=False,
                     help="Preserve the current environment settings rather than wiping them by default.")
     ap.add_argument("--cpu", action="store", default=None, help="Specify specific CPU type for QEMU to use")
@@ -86,6 +89,7 @@ def parse_args():
 
 
 args, local_binds, commands = parse_args()
+logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
 
 def bind_mount(chroot_path, umount=False):

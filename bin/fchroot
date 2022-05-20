@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import logging
 import os
 import subprocess
 import sys
@@ -14,10 +15,6 @@ from fchroot.version import __version__, __codename__
 
 exec_mode = False
 verbose = False
-
-
-
-
 
 def main():
     sys.stderr.write(
@@ -38,11 +35,14 @@ def main():
         binary_path = os.path.join(chroot_path, binary.lstrip('/'))
         if os.path.exists(binary_path):
             arch_desc = binfmt.get_arch_of_binary(binary_path)
+            if arch_desc:
+                break
 
     if arch_desc is None:
         common.die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
-
+    logging.debug(f"Detected arch: {arch_desc}")
     native_arch = binfmt.native_arch_desc()
+    logging.debug(f"Native arch: {native_arch}")
 
     if arch_desc != native_arch:
         binfmt.setup_wrapper(chroot_path, arch_desc)

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import os
 import string
 
 from fchroot.common import *
@@ -118,8 +117,10 @@ def supported_binfmts(native_arch_desc=None):
 
 def get_arch_of_binary(path):
 	hexstring = get_binary_hexstring(path)
+	logging.debug(f"Discovered hexstring: {hexstring} for {path}")
 	for arch_desc, arch_settings in qemu_arch_settings.items():
 		if hexstring in arch_settings['hexstring']:
+			logging.debug(f"Found {arch_desc}")
 			return arch_desc
 	return None
 
