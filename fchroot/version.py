@@ -1,2 +1,2 @@
-__version__ = "##VERSION##"
-__codename__ = "##CODENAME##"
+__version__ = "0.4.0"
+__codename__ = "Mole Man"
