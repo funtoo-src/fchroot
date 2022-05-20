@@ -77,7 +77,7 @@ def parse_args():
                     help="Preserve the current environment settings rather than wiping them by default.")
     ap.add_argument("--cpu", action="store", default=None, help="Specify specific CPU type for QEMU to use")
     ap.add_argument("--bind", action="append", nargs=1, default=[], help="Specify additional bind mounts in src:dest format")
-    ap.add_argument("--nobind", acction="store_true", default=False, help="Disable all bind mounts when entering fchroot")
+    ap.add_argument("--nobind", action="store_true", default=False, help="Disable all bind mounts when entering fchroot")
     known, remainder = ap.parse_known_args()
     if known.nobind and len(known.bind):
         die(f"Error -- the --nobind and --bind arguments cannot be used at the same time.")
