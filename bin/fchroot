@@ -69,7 +69,8 @@ def main():
         env_whitelist = ["TERM"]
         env = {}
         for item in env_whitelist:
-            env[item] = os.environ[item]
+            if item in os.environ:
+                env[item] = os.environ[item]
     env.update({"PS1": '\\033[01;33mfchroot\\033[0m \\$ '})
     # newer method where we wait in the background to undo the bind mounts.
     result = subprocess.run(['/bin/chroot'] + [common.args.newroot] + common.commands, env=env)
