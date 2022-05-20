@@ -24,6 +24,7 @@ EOF
 }
 
 commit() {
+	git commit -a -m "$VERSION release."
 	git tag -f "$VERSION"
 	git push
 	git push --tags
