@@ -22,7 +22,7 @@ qemu_arch_settings = {
 	'arm-64bit': {
 		'qemu_binary': 'qemu-aarch64',
 		'qemu_cpu': 'cortex-a72',
-		'hexstring': ['7f454c460201010000000000000000000200b7', '7f454c460201010000000000000000000300b7']
+		'hexstring': [['7f454c460201010000000000000000000200b7', 'fffffffffffffffcfffffffffffffffffeffff']]
 	},
 	'arm-32bit': {
 		'qemu_binary': 'qemu-arm',
@@ -33,6 +33,11 @@ qemu_arch_settings = {
 		'qemu_binary': 'qemu-ppc64',
 		'qemu_cpu': 'power7',
 		'hexstring': ['7f454c46020201000000000000000000000200']
+	},
+	'powerpc-32bit': {
+		'qemu_binary': 'qemu-ppc',
+		'qemu_cpu': 'max',
+		'hexstring': [['7f454c4601020100000000000000000000020014', 'ffffffffffffff00fffffffffffffffffffeffff']]
 	},
 	'x86-64bit': {
 		'qemu-binary': 'qemu-x86_64',
@@ -117,11 +122,22 @@ def supported_binfmts(native_arch_desc=None):
 
 def get_arch_of_binary(path):
 	hexstring = get_binary_hexstring(path)
+	hex_found = int(hexstring, 16)
 	logging.debug(f"Discovered hexstring: {hexstring} for {path}")
 	for arch_desc, arch_settings in qemu_arch_settings.items():
-		if hexstring in arch_settings['hexstring']:
-			logging.debug(f"Found {arch_desc}")
-			return arch_desc
+		for hex_info in arch_settings['hexstring']:
+			if isinstance(hex_info, list):
+				magic, mask = hex_info
+				magic = int(magic, 16)
+				mask = int(mask, 16)
+				if magic & mask == hex_found & mask:
+					logging.debug(f"Found {arch_desc}")
+					return arch_desc
+			else:
+				hex_info = int(hex_info, 16)
+				if hex_info == hex_found:
+					logging.debug(f"Found {arch_desc}")
+					return arch_desc
 	return None
 
 
