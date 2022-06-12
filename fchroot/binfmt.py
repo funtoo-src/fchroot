@@ -17,40 +17,60 @@ qemu_arch_settings = {
 	'riscv-64bit': {
 		'qemu_binary': 'qemu-riscv64',
 		'qemu_cpu': 'sifive-u54',
-		'hexstring': ['7f454c460201010000000000000000000200f3', '7f454c460201010000000000000000000300f3']
+		'elf': {
+			'magic': '7f454c460201010000000000000000000200f300',
+			'mask': 'ffffffffffffff00fffffffffffffffffeffffff',
+		},
 	},
 	'arm-64bit': {
 		'qemu_binary': 'qemu-aarch64',
 		'qemu_cpu': 'cortex-a72',
-		'hexstring': [['7f454c460201010000000000000000000200b7', 'fffffffffffffffcfffffffffffffffffeffff']]
+		'elf': {
+			'magic': '7f454c460201010000000000000000000200b700',
+			'mask': 'ffffffffffffff00fffffffffffffffffeffffff',
+		},
 	},
 	'arm-32bit': {
 		'qemu_binary': 'qemu-arm',
 		'qemu_cpu': 'cortex-a7',
-		'hexstring': ['7f454c46010101000000000000000000020028', '7f454c46010101000000000000000000030028']
+		'elf': {
+			'magic': '7f454c4601010100000000000000000002002800',
+			'mask': 'ffffffffffffff00fffffffffffffffffeffffff',
+		},
 	},
 	'powerpc-64bit': {
 		'qemu_binary': 'qemu-ppc64',
 		'qemu_cpu': 'power7',
-		'hexstring': ['7f454c46020201000000000000000000000200']
+		'elf': {
+			'magic': '7f454c4602020100000000000000000000020015',
+			'mask': 'ffffffffffffff00fffffffffffffffffffeffff',
+		},
 	},
 	'powerpc-32bit': {
 		'qemu_binary': 'qemu-ppc',
 		'qemu_cpu': 'max',
-		'hexstring': [['7f454c4601020100000000000000000000020014', 'ffffffffffffff00fffffffffffffffffffeffff']]
+		'elf': {
+			'magic': '7f454c4601020100000000000000000000020014',
+			'mask': 'ffffffffffffff00fffffffffffffffffffeffff',
+		},
 	},
 	'x86-64bit': {
 		'qemu-binary': 'qemu-x86_64',
 		'qemu_cpu': 'max',
-		'hexstring': ['7f454c4602010100000000000000000003003e', '7f454c4602010100000000000000000002003e']
+		'elf': {
+			'magic': '7f454c4602010100000000000000000002003e',
+			'mask': 'ffffffffffffff00fffffffffffffffffffeffff',
+		},
+	},
+	'x86-32bit': {
+		'qemu-binary': 'qemu-i386',
+		'qemu_cpu': 'max',
+		'elf': {
+			'magic': '7f454c46010101000000000000000000020003',
+			'mask': 'ffffffffffffff00fffffffffffffffffffeffff',
+		},
+		'native-support': ['x86-64bit']
 	}
-}
-
-native_support = {
-	'x86-64bit': ['x86-32bit'],
-	'x86-32bit': [],
-	'arm-64bit': ['arm-32bit'],
-	'arm-32bit': []
 }
 
 
@@ -82,12 +102,13 @@ int main(int argc, char **argv, char **envp) {{
 	with open(os.path.join(out_path, "qemu-%s-wrapper.c" % qemu_arch), "w") as f:
 		f.write(wrapper_code.format(qemu_binary=qemu_binary, qemu_cpu=qemu_cpu))
 	success = run_verbose("wrapper",
-				["gcc", "-static", "-O2", "-s", "-o",
-					f"{out_path}/qemu-{qemu_arch}-wrapper",
-					f"{out_path}/qemu-{qemu_arch}-wrapper.c"]
-			)
+	                      ["gcc", "-static", "-O2", "-s", "-o",
+	                       f"{out_path}/qemu-{qemu_arch}-wrapper",
+	                       f"{out_path}/qemu-{qemu_arch}-wrapper.c"]
+	                      )
 	if not success:
 		raise QEMUWrapperException("Compilation failed.")
+
 
 # Where our stuff will look for qemu binaries:
 qemu_binary_path = "/usr/bin"
@@ -121,30 +142,26 @@ def supported_binfmts(native_arch_desc=None):
 
 
 def get_arch_of_binary(path):
-	hexstring = get_binary_hexstring(path)
-	hex_found = int(hexstring, 16)
-	logging.debug(f"Discovered hexstring: {hexstring} for {path}")
+	found = get_binary_hexstring(path)
+	logging.debug(f"Discovered hexstring: {found} for {path}")
 	for arch_desc, arch_settings in qemu_arch_settings.items():
-		for hex_info in arch_settings['hexstring']:
-			if isinstance(hex_info, list):
-				magic, mask = hex_info
-				magic = int(magic, 16)
-				mask = int(mask, 16)
-				if magic & mask == hex_found & mask:
-					logging.debug(f"Found {arch_desc}")
-					return arch_desc
-			else:
-				hex_info = int(hex_info, 16)
-				if hex_info == hex_found:
-					logging.debug(f"Found {arch_desc}")
-					return arch_desc
+		magic = arch_settings["elf"]["magic"]
+		mask = arch_settings["elf"]["mask"]
+		magic_int = int(magic, 16)
+		mask_int = int(mask, 16)
+		found_int = int(found[0:len(magic)], 16)
+		if magic_int & mask_int == found_int & mask_int:
+			logging.debug(f"Found {arch_desc}")
+			return arch_desc
+		else:
+			logging.debug(f"Root is NOT {arch_desc} as {found} does not match {magic}")
 	return None
 
 
 def get_binary_hexstring(path):
 	chunk_as_hexstring = ""
 	with open(path, 'rb') as f:
-		for x in range(0, 19):
+		for x in range(0, 23):
 			chunk_as_hexstring += f.read(1).hex()
 	return chunk_as_hexstring
 
@@ -171,27 +188,17 @@ def register_binfmt(arch_desc, wrapper_bin):
 		raise QEMUWrapperException("Error: wrapper binary %s not found.\n" % wrapper_bin)
 	if arch_desc not in qemu_arch_settings:
 		raise QEMUWrapperException("Error: arch %s not recognized. Specify one of: %s.\n" % (arch_desc, ", ".join(supported_binfmts())))
-	hexcount = 0
-	for hexstring in qemu_arch_settings[arch_desc]['hexstring']:
-		local_arch_desc = arch_desc if hexcount == 0 else "%s-%s" % (arch_desc, hexcount)
-		if os.path.exists("/proc/sys/fs/binfmt_misc/%s" % local_arch_desc):
-			sys.stderr.write("Warning: binary format %s already registered in /proc/sys/fs/binfmt_misc.\n" % local_arch_desc)
-		try:
-			with open("/proc/sys/fs/binfmt_misc/register", "w") as f:
-				chunk_as_hexstring = hexstring
-				mask_as_hexstring = "fffffffffffffffcfffffffffffffffffeffff"
-				mask = int(mask_as_hexstring, 16)
-				chunk = int(chunk_as_hexstring, 16)
-				out_as_hexstring = hex(chunk & mask)[2:]
-				f.write(":%s:M::" % local_arch_desc)
-				f.write(escape_hexstring(out_as_hexstring))
-				f.write(":")
-				f.write(escape_hexstring(mask_as_hexstring))
-				f.write(":/usr/local/bin/%s" % os.path.basename(wrapper_bin))
-				f.write(":C\n")
-		except (IOError, PermissionError) as e:
-			raise QEMUWrapperException("Was unable to write to /proc/sys/fs/binfmt_misc/register.")
-		hexcount += 1
+	if os.path.exists("/proc/sys/fs/binfmt_misc/%s" % arch_desc):
+		sys.stderr.write("Warning: binary format %s already registered in /proc/sys/fs/binfmt_misc.\n" % arch_desc)
+	try:
+		with open("/proc/sys/fs/binfmt_misc/register", "w") as f:
+			magic = int(qemu_arch_settings[arch_desc]["elf"]["magic"], 16)
+			mask_as_hexstring = qemu_arch_settings[arch_desc]["elf"]["mask"]
+			mask = int(mask_as_hexstring, 16)
+			out_as_hexstring = hex(magic & mask)[2:]  # This strips the "0x"
+			f.write(f":{arch_desc}:M::{escape_hexstring(out_as_hexstring)}:{escape_hexstring(mask_as_hexstring)}:/usr/local/bin/{os.path.basename(wrapper_bin)}:C\n")
+	except (IOError, PermissionError) as e:
+		raise QEMUWrapperException("Was unable to write to /proc/sys/fs/binfmt_misc/register.")
 
 
 def setup_wrapper(chroot_path, arch_desc):

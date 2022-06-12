@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import logging
 import os
 import subprocess
@@ -13,77 +14,204 @@ import fchroot.common as common
 import fchroot.binfmt as binfmt
 from fchroot.version import __version__, __codename__
 
-exec_mode = False
-verbose = False
+
+class Command:
+
+	def __init__(self, arch_info):
+		self.arch_info = arch_info
+
+	def initialize_cmd(self):
+		return []
+
+	def initialize_env(self):
+		if common.args.preserve_env:
+			return os.environ
+		else:
+			env_whitelist = ["TERM"]
+			env = {}
+			for item in env_whitelist:
+				if item in os.environ:
+					env[item] = os.environ[item]
+			env.update({"PS1": '\\033[01;33mfchroot\\033[0m \\$ '})
+			return env
+
+	def start(self):
+		chroot_cmd_list = self.arch_info.get_chroot_cmd_list()
+		cmd_list = self.initialize_cmd()
+		cmd_list = chroot_cmd_list + [common.args.newroot] + cmd_list
+		env = self.initialize_env()
+		logging.debug(f"Running {cmd_list}")
+		return subprocess.run(cmd_list, env=env)
+
+
+class CustomCommand(Command):
+
+	def __init__(self, arch_info, cmd_list):
+		self.arch_info = arch_info
+		self.cmd_list = cmd_list
+
+	def initialize_cmd(self):
+		return self.cmd_list
+
+
+class BashCommand(Command):
+	exe = "/bin/bash"
+
+	def initialize_cmd(self):
+		cmd_list = [self.exe]
+		with open(os.path.join(common.args.newroot, "var/tmp/fchroot.bash"), "w") as f:
+			if not common.args.preserve_env:
+				f.write('source /etc/profile\n')
+			f.write("export PS1='\\033[01;33mfchroot\\033[0m \\$ '\n")
+		if not common.args.preserve_env:
+			cmd_list += ["--rcfile", "/var/tmp/fchroot.bash"]
+		return cmd_list
+
+
+class SuCommand(Command):
+	exe = "/bin/su"
+
+	# Note that this ENVIRON_FILE trick doesn't work for setting a custom fchroot prompt,
+	# because even if we manage to get PS1 set to some value, then a shell (typically
+	# /bin/bash) is invoked, which is started as a login shell, and will re-initialize
+	# its own prompt. Therefore, using BashCommand is preferred.
+
+	def initialize_env(self):
+		env = super().initialize_env()
+		env["ENVIRON_FILE"] = "/var/tmp/fchroot.su"
+		return env
+
+	def initialize_cmd(self):
+		cmd_list = [self.exe]
+		if not common.args.preserve_env:
+			cmd_list.append("--login")
+		with open(os.path.join(common.args.newroot, "var/tmp/fchroot.su"), "w") as f:
+			f.write("PS1='\\033[01;33mfchroot\\033[0m \\$ '\n")
+		return cmd_list
+
+
+class ChrootManager:
+	binary_found = None
+	fchroot_arch = None
+	native_arch = None
+	chroot_path = None
+
+	def __init__(self):
+		self.chroot_path = os.path.abspath(common.args.newroot)
+		if self.chroot_path == "/":
+			common.die("You probably don't want to fchroot to /.")
+		binaries_to_scan = ["/bin/bash", "/bin/su"]
+		if common.commands:
+			# Add the explicit thing we will be executing as something to scan to determine architecture:
+			binaries_to_scan = common.commands[:1] + binaries_to_scan
+
+		for binary in binaries_to_scan:
+			binary_path = os.path.join(self.chroot_path, binary.lstrip('/'))
+			if os.path.exists(binary_path):
+				self.binary_found = binary
+				self.fchroot_arch = binfmt.get_arch_of_binary(binary_path)
+				if self.fchroot_arch:
+					break
+		if self.fchroot_arch is None:
+			common.die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
+		logging.debug(f"Detected arch: {self.fchroot_arch}")
+		self.native_arch = binfmt.native_arch_desc()
+		logging.debug(f"Native arch: {self.native_arch}")
+		if self.need_wrapper():
+			binfmt.setup_wrapper(self.chroot_path, self.fchroot_arch)
+
+	def native_support_for_fchroot_arch(self):
+		"""
+		This tells us whether the native arch we are on has built-in (without QEMU, but possibly with a helper command like 'linux32') support
+		for the fchroot arch. This boolean value only makes sense if we already know that the fchroot arch and native arch are different.
+		:return: bool
+		"""
+		return "native-support" in binfmt.qemu_arch_settings[self.fchroot_arch] and self.native_arch in binfmt.qemu_arch_settings[self.fchroot_arch]["native-support"]
+
+	def need_wrapper(self):
+		"""
+		This tells us whether we actually need a QEMU binfmt wrapper to handle the current fchroot, or not.
+		:return: bool
+		"""
+		result = self.fchroot_arch != self.native_arch and not self.native_support_for_fchroot_arch()
+		logging.debug(f"I need a QEMU wrapper: {result}")
+		return result
+
+	def get_chroot_cmd_list(self):
+		"""
+		Do we perform a simple chroot or use linux32 or some other helper command? This method returns a cmd_list of what we do for chroot.
+		:return: list
+		"""
+		cmd_list = []
+		if self.native_arch == "x86-64bit" and self.fchroot_arch == "x86-32bit":
+			if os.path.exists("/usr/bin/linux32"):
+				cmd_list += ["/usr/bin/linux32"]
+			elif os.path.exists("/usr/bin/setarch"):
+				cmd_list += ["/usr/bin/setarch", "i386"]
+		cmd_list += ["/bin/chroot"]
+		return cmd_list
+
+	def get_command(self):
+		if common.commands:
+			command = CustomCommand(self, common.commands)
+		else:
+			if self.binary_found == "/bin/bash":
+				command = BashCommand(self)
+			elif self.binary_found == "/bin/su":
+				command = SuCommand(self)
+			else:
+				common.die(f"Unrecognized command: {self.binary_found}")
+		return command
+
+	def pre(self):
+		# copy /etc/resolv.conf into chroot:
+		action = "DNS"
+		if os.path.exists("/etc/resolv.conf"):
+			cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(self.chroot_path, "etc")]
+			common.run_verbose(action, cmd_list)
+
+	def chroot(self):
+		if not common.args.nobind:
+			common.bind_mount(self.chroot_path)
+		qemu_cpu = common.args.cpu if common.args.cpu else binfmt.qemu_arch_settings[self.fchroot_arch]["qemu_cpu"]
+
+		if self.fchroot_arch != self.native_arch:
+			if self.need_wrapper():
+				sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{self.fchroot_arch} ({qemu_cpu} CPU)" + common.END + " fchroot...\n")
+			else:
+				sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{self.fchroot_arch} (supported natively)" + common.END + " fchroot...\n")
+		else:
+			sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{self.fchroot_arch} (native)" + common.END + " fchroot...\n")
+
+		command = self.get_command()
+
+		# Perform "pre" steps (like copy /etc/resolv.conf):
+
+		self.pre()
+
+		# Start chroot:
+
+		result = command.start()
+
+		# Clean up after chroot:
+
+		if not common.args.nobind:
+			common.bind_mount(self.chroot_path, umount=True)
+
+		sys.stderr.write(common.CYAN + "<<< Exiting " + common.END + "fchroot.\n")
+		return result
 
 
 def main():
 	sys.stderr.write(
 		f"\nFuntoo fchroot {__version__} (\"{__codename__}\")\nCopyright 2020-2022 Funtoo Solutions, Inc.; Licensed under the Apache License, Version 2.0\n\n")
+
 	if os.geteuid() != 0:
 		sys.stderr.write("You must be root to fchroot. Exiting.\n")
 		sys.exit(1)
 
-	chroot_path = os.path.abspath(common.args.newroot)
-	binaries_to_scan = ["/bin/su", "/bin/bash"]
-
-	if common.commands:
-		# Add the explicit thing we will be executing as something to scan to determine architecture:
-		binaries_to_scan = common.commands[:1] + binaries_to_scan
-
-	arch_desc = None
-	binary_found = None
-	for binary in binaries_to_scan:
-		binary_path = os.path.join(chroot_path, binary.lstrip('/'))
-		if os.path.exists(binary_path):
-			binary_found = binary
-			arch_desc = binfmt.get_arch_of_binary(binary_path)
-			if arch_desc:
-				break
-
-	if arch_desc is None:
-		common.die("Couldn't detect fchroot arch. Please specify path of executable within chroot to execute on command-line.")
-	logging.debug(f"Detected arch: {arch_desc}")
-	native_arch = binfmt.native_arch_desc()
-	logging.debug(f"Native arch: {native_arch}")
-
-	if arch_desc != native_arch:
-		binfmt.setup_wrapper(chroot_path, arch_desc)
-
-	# copy /etc/resolv.conf into chroot:
-	action = "DNS"
-	if os.path.exists("/etc/resolv.conf"):
-		cmd_list = ["/bin/cp", "/etc/resolv.conf", os.path.join(chroot_path, "etc")]
-		common.run_verbose(action, cmd_list)
-
-	if not common.args.nobind:
-		common.bind_mount(chroot_path)
-	qemu_cpu = common.args.cpu if common.args.cpu else binfmt.qemu_arch_settings[arch_desc]["qemu_cpu"]
-
-	if arch_desc != native_arch:
-		sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{arch_desc} ({qemu_cpu} CPU)" + common.END + " fchroot...\n")
-	else:
-		sys.stderr.write(common.GREEN + ">>> Entering " + common.CYAN + f"{arch_desc} (native)" + common.END + " fchroot...\n")
-
-	if common.args.preserve_env:
-		env = os.environ
-	else:
-		env_whitelist = ["TERM"]
-		env = {}
-		for item in env_whitelist:
-			if item in os.environ:
-				env[item] = os.environ[item]
-	env.update({"PS1": '\\033[01;33mfchroot\\033[0m \\$ '})
-	# newer method where we wait in the background to undo the bind mounts.
-	if common.commands:
-		commands = common.commands
-	else:
-		# call /bin/bash --login or /bin/su --login directly to set up environment properly.
-		commands = [binary_found, "--login"]
-	result = subprocess.run(['/bin/chroot'] + [common.args.newroot] + common.commands, env=env)
-	if not common.args.nobind:
-		common.bind_mount(chroot_path, umount=True)
-	sys.stderr.write(common.CYAN + "<<< Exiting " + common.END + "fchroot.\n")
+	manager = ChrootManager()
+	result = manager.chroot()
 	sys.exit(result.returncode)
 
 

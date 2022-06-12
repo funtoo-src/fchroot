@@ -1,2 +1,2 @@
-__version__ = "0.4.1"
-__codename__ = "Revenge of Mole Man"
+__version__ = "1.0.0"
+__codename__ = "Valley of the Moles"
