@@ -105,7 +105,7 @@ def bind_mount(chroot_path, umount=False):
             dest_abs = os.path.join(chroot_path, dest)
             if umount:
                 action = "umount"
-                mount_cmd = ["/bin/umount", "-R", "--lazy", dest_abs]
+                mount_cmd = ["/bin/umount", "-R", dest_abs]
                 badval = 10
             else:
                 action = "mount"
