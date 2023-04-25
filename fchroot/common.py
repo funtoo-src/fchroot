@@ -105,7 +105,7 @@ def bind_mount(chroot_path, umount=False):
             dest_abs = os.path.join(chroot_path, dest)
             if umount:
                 action = "umount"
-                mount_cmd = ["/bin/umount", "-R", dest_abs]
+                mount_cmd = ["/bin/umount", "-R", "--lazy", dest_abs]
                 badval = 10
             else:
                 action = "mount"
@@ -121,4 +121,10 @@ def bind_mount(chroot_path, umount=False):
                 sys.stderr.write(GREEN + f" {action}: /{dest} (already mounted)\n")
             else:
                 run_verbose(action, mount_cmd, badval=badval)
+                if not umount:
+                    if recurse:
+                        opt = "--make-rprivate"
+                    else:
+                        opt = "--make-private"
+                    run_verbose(action, ["/bin/mount", opt, dest_abs])
 
